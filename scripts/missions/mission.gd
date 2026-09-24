@@ -439,6 +439,7 @@ func win() -> void:
 		G.controller.cancel_mode()
 	Voice.stop_all()
 	Voice.say("eva", "Mission accomplished.")
+	print("Mission %d accomplished at t=%.0f" % [number, time])
 	for l in Campaign.mission_info(number).get("debrief", []):
 		Voice.say(l[0], l[1])
 	G.hud.show_mission_end(true, "")
@@ -453,6 +454,7 @@ func lose(reason: String) -> void:
 		G.controller.cancel_mode()
 	Voice.stop_all()
 	Voice.say("eva", "Mission failed.")
+	print("Mission %d failed at t=%.0f: %s" % [number, time, reason])
 	G.hud.show_mission_end(false, reason)
 
 

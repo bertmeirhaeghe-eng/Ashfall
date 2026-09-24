@@ -8,6 +8,7 @@ signal struck(pos: Vector3)
 var delay := 3.0
 var radius := 3.0
 var damage := 1800.0
+var visual := "lance"      # lance | gas
 var _t := 0.0
 var _fired := false
 var _reticle: MeshInstance3D
@@ -71,10 +72,15 @@ func _physics_process(delta: float) -> void:
 func _strike() -> void:
 	_fired = true
 	_reticle.visible = false
-	var top := position + Vector3(0, 40, 0)
-	Fx.beam(top, position, Color(1.0, 1.0, 0.95), radius * 0.35, 0.9)
-	Fx.beam(top, position, Color(0.7, 0.85, 1.0), radius * 0.6, 0.5)
-	Fx.explosion(position + Vector3(0, 0.5, 0), radius * 1.4)
-	Fx.ring(position, Color(1.0, 0.9, 0.7, 0.8), radius * 2.2, 0.8)
-	G.damage_area(position, radius, damage, "laser", null, -1, true)
+	if visual == "gas":
+		Fx.explosion(position + Vector3(0, 0.3, 0), 1.0)
+		Fx.ring(position, Color(0.8, 1.0, 0.2, 0.7), radius * 1.2, 1.5)
+	else:
+		var top := position + Vector3(0, 40, 0)
+		Fx.beam(top, position, Color(1.0, 1.0, 0.95), radius * 0.35, 0.9)
+		Fx.beam(top, position, Color(0.7, 0.85, 1.0), radius * 0.6, 0.5)
+		Fx.explosion(position + Vector3(0, 0.5, 0), radius * 1.4)
+		Fx.ring(position, Color(1.0, 0.9, 0.7, 0.8), radius * 2.2, 0.8)
+	if damage > 0.0:
+		G.damage_area(position, radius, damage, "laser", null, -1, true)
 	struck.emit(position)
