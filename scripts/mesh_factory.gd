@@ -188,9 +188,9 @@ static func _load_model(model: String, faction: String) -> Dictionary:
 			var o := int(s["offset"])
 			var arrays := []
 			arrays.resize(Mesh.ARRAY_MAX)
-			arrays[Mesh.ARRAY_VERTEX] = raw.slice(o, o + n * 12).to_vector3_array()
-			arrays[Mesh.ARRAY_NORMAL] = raw.slice(o + n * 12, o + n * 24).to_vector3_array()
-			arrays[Mesh.ARRAY_COLOR] = raw.slice(o + n * 24, o + n * 40).to_color_array()
+			arrays[Mesh.ARRAY_VERTEX] = _decode_vec3s(raw, o, n)
+			arrays[Mesh.ARRAY_NORMAL] = _decode_vec3s(raw, o + n * 12, n)
+			arrays[Mesh.ARRAY_COLOR] = _decode_colors(raw, o + n * 24, n)
 			if mesh == null:
 				mesh = ArrayMesh.new()
 			mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
@@ -202,6 +202,27 @@ static func _load_model(model: String, faction: String) -> Dictionary:
 		})
 	out = {"parts": parts, "meta": head["meta"]}
 	_models[path] = out
+	return out
+
+
+## PackedByteArray has no built-in float32-array conversion, so raw AMDL
+## vertex/normal/color blocks are decoded by hand (little-endian, matches the
+## numpy float32 blobs written by tools/models/ashmodel.py).
+static func _decode_vec3s(raw: PackedByteArray, start: int, n: int) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	out.resize(n)
+	for i in n:
+		var o := start + i * 12
+		out[i] = Vector3(raw.decode_float(o), raw.decode_float(o + 4), raw.decode_float(o + 8))
+	return out
+
+
+static func _decode_colors(raw: PackedByteArray, start: int, n: int) -> PackedColorArray:
+	var out := PackedColorArray()
+	out.resize(n)
+	for i in n:
+		var o := start + i * 16
+		out[i] = Color(raw.decode_float(o), raw.decode_float(o + 4), raw.decode_float(o + 8), raw.decode_float(o + 12))
 	return out
 
 
