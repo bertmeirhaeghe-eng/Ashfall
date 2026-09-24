@@ -88,6 +88,7 @@ func setup() -> void:
 	start_credits = 0
 	player().credits = 0
 	player().allowed = {}
+	player().free_radar = true   # Havel's field uplink
 	var team := spawn(["rifleman", "rifleman", "rifleman", "rifleman", "rocket_trooper", "rocket_trooper", "rocket_trooper",
 		"medic", "skyjumper", "skyjumper", "scout_mech", "scout_mech"], PLAYER, START + Vector2i(0, 2))
 	supply = spawn_one("supply_truck", PLAYER, START + Vector2i(-2, -3), "supply")

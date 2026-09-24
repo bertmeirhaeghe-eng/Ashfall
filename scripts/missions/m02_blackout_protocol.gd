@@ -124,7 +124,7 @@ func setup() -> void:
 	spawn(["raider", "raider", "rifleman", "rifleman"], ENEMY, Vector2i(56, 36))
 	spawn(["rifleman", "rocket_trooper", "rifleman"], ENEMY, Vector2i(44, 46))
 	enemy().credits = 3000
-	add_ai(enemy(), VEIL, BASE, {"first_attack": 300.0, "wave_interval": 80.0, "wave_size": 5, "wave_max": 12,
+	add_ai(enemy(), VEIL, BASE, {"first_attack": 420.0, "wave_interval": 80.0, "wave_size": 5, "wave_max": 12,
 		"income": 5.0, "units": ["rifleman", "rocket_trooper", "raider", "scorpion"],
 		"build_order": ["power_plant", "guard_tower", "power_plant", "guard_tower"]})
 	# the coal power station (neutral)

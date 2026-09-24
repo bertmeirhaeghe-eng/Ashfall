@@ -26,6 +26,15 @@ func begin(p_name: String) -> void:
 		Campaign.start_mission()
 	elif p_name == "campaign":
 		Campaign.new_game()
+	elif p_name.begins_with("shot"):
+		# shotN[:seconds] - render mission N for a while and save a screenshot
+		var spec := p_name.substr(4)
+		only = int(spec.get_slice(":", 0))
+		Campaign.mission_index = maxi(only, 1)
+		if only == 0:
+			_shot_menu.call_deferred(spec)
+		else:
+			Campaign.start_mission()
 	elif p_name == "smoke":
 		Campaign.mission_index = 1
 		Campaign.start_mission()
@@ -40,6 +49,12 @@ func attach(m: Mission) -> void:
 
 func _run(m: Mission) -> void:
 	print("TEST mission %d start" % m.number)
+	if mode.begins_with("shot"):
+		var secs := float(mode.get_slice(":", 1)) if mode.contains(":") else 4.0
+		await _wait_time(m, secs)
+		await _save_shot("mission%d" % m.number)
+		get_tree().quit(0)
+		return
 	if mode == "smoke":
 		await _wait_time(m, 150.0)
 		if not is_instance_valid(m):
@@ -80,11 +95,40 @@ func _run(m: Mission) -> void:
 		await get_tree().create_timer(0.5).timeout
 		Campaign.advance()
 		if Campaign.completed:
-			await get_tree().create_timer(2.0).timeout
+			await get_tree().create_timer(0.5).timeout
 			print("TEST epilogue reached, flags: %s" % str(Campaign.flags))
+			var need := ["tallow_friendly", "resonator_x", "refugees_saved", "seed_core_known", "rourke_arrested"]
+			for k in need:
+				if not Campaign.flag(k):
+					_fail("campaign flag missing: " + k)
+					return
 			_pass("campaign")
 	else:
 		_pass("m%d" % m.number)
+
+
+func _save_shot(tag: String) -> void:
+	await RenderingServer.frame_post_draw
+	var img := get_viewport().get_texture().get_image()
+	var dir := OS.get_environment("ASHFALL_SHOT_DIR")
+	if dir == "":
+		dir = "user://"
+	var path := dir.path_join("shot_%s.png" % tag)
+	img.save_png(path)
+	print("TEST shot saved ", path)
+
+
+func _shot_menu(spec: String) -> void:
+	# shot0:menu | shot0:briefing | shot0:prologue
+	var what := spec.get_slice(":", 1)
+	if what == "menu" or what == "":
+		get_tree().change_scene_to_file(Campaign.MENU_SCENE)
+	else:
+		Campaign.story_mode = what
+		get_tree().change_scene_to_file(Campaign.STORY_SCENE)
+	await get_tree().create_timer(2.5).timeout
+	await _save_shot(what)
+	get_tree().quit(0)
 
 
 func _wait_time(m: Mission, secs: float) -> void:

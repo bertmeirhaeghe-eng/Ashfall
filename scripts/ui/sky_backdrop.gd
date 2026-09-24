@@ -12,7 +12,7 @@ var _t := 0.0
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	for i in 140:
 		stars.append(Vector3(randf(), randf() * 0.75, randf_range(0.3, 1.0)))
 	for i in 10:

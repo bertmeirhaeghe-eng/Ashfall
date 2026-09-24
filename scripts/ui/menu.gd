@@ -11,7 +11,7 @@ var continue_btn: Button
 
 func _ready() -> void:
 	get_tree().paused = false
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	if _handle_cmdline():
 		return
 	add_child(SkyBackdrop.new())
@@ -99,6 +99,9 @@ func _on_continue() -> void:
 
 
 func _handle_cmdline() -> bool:
+	if Campaign.cmdline_handled:
+		return false
+	Campaign.cmdline_handled = true
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--mission="):
 			Campaign.mission_index = clampi(int(a.get_slice("=", 1)), 1, Campaign.MISSIONS.size())

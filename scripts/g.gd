@@ -160,6 +160,8 @@ func spawn_unit(id: String, team: int, pos: Vector3) -> Unit:
 	u.position = Vector3(pos.x, 0.0, pos.z)
 	world.add_child(u)
 	register(u)
+	if mission:
+		mission.apply_upgrades(u)
 	return u
 
 

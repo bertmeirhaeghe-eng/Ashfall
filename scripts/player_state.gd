@@ -247,6 +247,8 @@ func _complete(cat: String, def_id: String) -> void:
 	var u: Unit = G.spawn_unit(def_id, id, G.map.cell_to_world(exit_c))
 	if u == null:
 		return
+	if is_ai:
+		u.tags["ai_made"] = true
 	if G.mission:
 		G.mission.on_unit_built(u)
 	var goal := f.rally_cell

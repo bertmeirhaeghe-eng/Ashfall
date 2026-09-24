@@ -19,7 +19,7 @@ var _finished := false
 
 func _ready() -> void:
 	get_tree().paused = false
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	theme = UiTheme.make()
 	backdrop = SkyBackdrop.new()
 	add_child(backdrop)
@@ -28,7 +28,7 @@ func _ready() -> void:
 	Voice.queue_empty.connect(_on_all_spoken)
 
 	var root := MarginContainer.new()
-	root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	for side in ["left", "right", "top", "bottom"]:
 		root.add_theme_constant_override("margin_" + side, 48)
 	add_child(root)
@@ -62,6 +62,7 @@ func _ready() -> void:
 	left.add_child(lvb)
 	portrait = Control.new()
 	portrait.custom_minimum_size = Vector2(230, 230)
+	portrait.clip_contents = true
 	portrait.draw.connect(_draw_portrait)
 	lvb.add_child(portrait)
 	speaker_label = Label.new()
@@ -141,7 +142,7 @@ func _ready() -> void:
 				op.add_child(ol)
 	start_btn.grab_focus()
 	_play()
-	if Campaign.debug_autotest != "":
+	if Campaign.debug_autotest != "" and not Campaign.debug_autotest.begins_with("shot"):
 		get_tree().create_timer(1.0).timeout.connect(_on_start)
 
 
@@ -203,12 +204,10 @@ func _draw_portrait() -> void:
 	elif _current_speaker == "sibyl":
 		for k in 6:
 			portrait.draw_arc(center - Vector2(0, 20), 20 + k * 8, 0, TAU, 32, Color(0.5, 1.0, 0.6, 0.5 - k * 0.07), 2.0)
-	var initials := ""
-	for part in Voice.speaker_name(_current_speaker).replace(".", "").split(" ", false):
-		if part.length() > 0 and part[0] == part[0].to_upper():
-			initials += part[0]
 	var font := get_theme_default_font()
-	portrait.draw_string(font, Vector2(0, s.y - 18), initials.right(2), HORIZONTAL_ALIGNMENT_CENTER, s.x, 26, c)
+	if int(Time.get_ticks_msec() / 600) % 2 == 0:
+		portrait.draw_circle(Vector2(16, 16), 5, Color(1, 0.25, 0.2))
+	portrait.draw_string(font, Vector2(26, 21), "LIVE", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(1, 0.4, 0.35))
 	portrait.draw_rect(Rect2(Vector2.ZERO, s), GOLD.darkened(0.3), false, 1.0)
 
 

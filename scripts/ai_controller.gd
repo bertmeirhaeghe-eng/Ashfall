@@ -13,7 +13,8 @@ extends Node
 ##   income: float          free credits per second (mission difficulty)
 ##   defend_radius: float   react to enemies this close to the base
 ##   target: Vector2i       fixed attack goal (otherwise nearest enemy structure)
-## Units tagged "scripted" are left alone.
+## Only units the AI trained itself (tag "ai_made") are commanded; pre-placed
+## defenders keep guarding their posts and mission waves follow their own orders.
 
 const DEFAULT_ORDER := ["power_plant", "refinery", "barracks", "power_plant", "war_factory",
 	"guard_tower", "power_plant", "refinery", "guard_tower", "power_plant", "barracks", "guard_tower"]
@@ -186,7 +187,7 @@ func _plan_units() -> void:
 func _army() -> Array:
 	var out: Array = []
 	for u in p.units():
-		if not (u is Harvester) and not u.tags.has("scripted") and not u.weapon.is_empty():
+		if not (u is Harvester) and u.tags.has("ai_made") and not u.tags.has("scripted") and not u.weapon.is_empty():
 			out.append(u)
 	return out
 

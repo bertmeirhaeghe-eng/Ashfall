@@ -155,6 +155,7 @@ var flags := {}                 # story flags carried between missions
 var story_mode := "briefing"    # prologue | briefing | epilogue
 var completed := false
 var debug_autotest := ""        # test harness hook
+var cmdline_handled := false
 
 
 func _ready() -> void:
@@ -168,6 +169,8 @@ func has_save() -> bool:
 
 
 func save_game() -> void:
+	if debug_autotest != "":
+		return  # automated tests never touch the player's save
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if f == null:
 		push_warning("Ashfall: cannot write save file")

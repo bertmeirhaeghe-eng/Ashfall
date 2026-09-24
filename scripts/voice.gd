@@ -188,12 +188,13 @@ func _ready() -> void:
 	enabled = bool(ProjectSettings.get_setting("audio/general/text_to_speech", false)) \
 			and DisplayServer.has_feature(DisplayServer.FEATURE_TEXT_TO_SPEECH)
 	if enabled:
-		for v in DisplayServer.tts_get_voices():
+		var all: Array = DisplayServer.tts_get_voices()
+		for v in all:
 			var lang: String = str(v.get("language", ""))
 			if lang.begins_with("en") or lang == "":
 				_voices.append({"id": v.get("id", ""), "name": str(v.get("name", "")).to_lower()})
 		if _voices.is_empty():
-			for v in DisplayServer.tts_get_voices():
+			for v in all:
 				_voices.append({"id": v.get("id", ""), "name": str(v.get("name", "")).to_lower()})
 		if _voices.is_empty():
 			enabled = false

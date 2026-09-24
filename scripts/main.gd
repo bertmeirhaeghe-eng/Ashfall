@@ -108,7 +108,7 @@ func _setup_weather(kind: String, cam: RTSCamera) -> void:
 		return
 	var p := GPUParticles3D.new()
 	p.name = "Weather"
-	p.amount = 900 if kind != "spores" else 300
+	p.amount = 900 if kind == "rain" or kind == "snow" else 350
 	p.lifetime = 2.0 if kind == "rain" else 5.0
 	p.visibility_aabb = AABB(Vector3(-40, -30, -40), Vector3(80, 60, 80))
 	var pm := ParticleProcessMaterial.new()
@@ -142,8 +142,8 @@ func _setup_weather(kind: String, cam: RTSCamera) -> void:
 			pm.initial_velocity_min = 2.0
 			pm.initial_velocity_max = 4.0
 			pm.gravity = Vector3(0.5, -1, 0)
-			quad.size = Vector2(0.08, 0.08)
-			qm.albedo_color = Color(0.5, 0.9, 0.55, 0.6)
+			quad.size = Vector2(0.035, 0.035)
+			qm.albedo_color = Color(0.5, 0.9, 0.55, 0.5)
 		_:
 			pm.direction = Vector3(0, 1, 0)
 			pm.spread = 60.0
@@ -151,8 +151,8 @@ func _setup_weather(kind: String, cam: RTSCamera) -> void:
 			pm.initial_velocity_max = 0.8
 			pm.gravity = Vector3(0, 0.2, 0)
 			pm.emission_box_extents = Vector3(30, 6, 30)
-			quad.size = Vector2(0.07, 0.07)
-			qm.albedo_color = Color(0.4, 1.0, 0.6, 0.8)
+			quad.size = Vector2(0.04, 0.04)
+			qm.albedo_color = Color(0.4, 1.0, 0.6, 0.7)
 	quad.material = qm
 	p.process_material = pm
 	p.draw_pass_1 = quad

@@ -127,7 +127,7 @@ func setup() -> void:
 		"wave_size": 5, "wave_max": 10, "income": 6.0, "units": ["rifleman", "rocket_trooper"]})
 	# the storm front, coming from the west
 	storm = GlassStorm.new()
-	storm.front = -4.0
+	storm.front = -12.0
 	storm.width = 24.0
 	storm.speed = 0.19
 	storm.map_h = H
@@ -236,7 +236,6 @@ func on_deployed(s: Structure) -> void:
 	_update_gather()
 	reveal("camp")
 	add_marker("camp", cell_pos(CAMP), Color(1.0, 0.3, 0.25))
-	player().free_radar = false
 	say("okafor", "Good. You have a base. Power first, then a refinery. When you're ready, find that camp in the forest.")
 	say("havel", "Stay close to your buildings while the storm passes. The walls will shelter anyone standing next to them.")
 

@@ -97,6 +97,15 @@ func on_unit_built(_u: Unit) -> void:
 	pass
 
 
+## Campaign upgrades applied to every unit the player owns (called for spawns too).
+func apply_upgrades(u: Unit) -> void:
+	if u.team != PLAYER or u.has_meta("upgraded"):
+		return
+	u.set_meta("upgraded", true)
+	if u.is_engineer() and number >= 5:
+		u.speed *= 1.35   # Mission 5 unlock: Engineer upgrades (faster capture)
+
+
 ## -1 = default rules, 0 = forbid, 1 = allow (skips the build-radius rule).
 func placement_override(_team: int, _id: String, _cell: Vector2i) -> int:
 	return -1
@@ -137,8 +146,36 @@ func on_lance_struck(_pos: Vector3) -> void:
 
 
 ## Sidebar special button pressed.
-func special_action(_id: String) -> void:
-	pass
+func special_action(id: String) -> void:
+	if id == "harden":
+		harden()
+
+
+# ---------------------------------------------------------------- Hardened upgrade (Mission 8 on)
+
+var harden_ready_t := 0.0
+
+
+func enable_harden() -> void:
+	G.hud.add_special("harden", "Harden network (30s)")
+
+
+func update_harden() -> void:
+	var cd := harden_ready_t - time
+	G.hud.set_special("harden", "Harden network (30s)" if cd <= 0.0 else "Harden recharging %ds" % int(cd), cd <= 0.0)
+
+
+## Networked units become immune to SIBYL hijacking for 30 seconds.
+func harden() -> void:
+	if time < harden_ready_t:
+		return
+	harden_ready_t = time + 120.0
+	for u in team_units(PLAYER):
+		if u.def.get("networked", false):
+			u.tags["hardened_until"] = time + 30.0
+			u.hijack = 0.0
+			Fx.ring(u.position, Color(0.5, 0.8, 1.0), 1.2, 0.6)
+	G.notify(PLAYER, "Networked units hardened for 30 seconds.")
 
 
 # ================================================================ players
@@ -155,6 +192,8 @@ func setup_players() -> void:
 	G.players = [me, enemy, neutral, ally, hostile]
 	G.local_team = PLAYER
 	me.allowed = Campaign.tech_for(number)
+	if number >= 8:
+		me.extra_factions = ["veil"]   # Kestrel's Veil units, from Mission 8 on
 	me.credits = start_credits
 	G.blue_allowed = number >= 6
 	for p in G.players:

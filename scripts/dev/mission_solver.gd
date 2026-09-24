@@ -328,3 +328,84 @@ func solve_m8() -> void:
 		kill([t])
 		await wait(0.5)
 	log_msg("kite back: team=%d" % kite.team)
+
+
+# ---------------------------------------------------------------- M9
+
+func solve_m9() -> void:
+	var decoy: Structure = m.building("decoy", 0, m.BASE + Vector2i(12, -12))
+	decoy.invulnerable = true
+	m.lance_t = 21.0
+	await until(func(): return m.lance_strike != null, 5.0)
+	log_msg("lance reticle at %s (decoy at %s)" % [m.lance_strike.position, decoy.position])
+	kill_tag("valley_gate")
+	await wait(1.0)
+	var before: float = m.salvo_left
+	kill([m.tagged("relay")[0]])
+	await wait(1.0)
+	log_msg("valley=%s salvo +%.0f" % [m.obj("valley")["state"], m.salvo_left - before])
+	var engs: Array = units().filter(func(u): return u.def_id == "engineer")
+	for e in engs:
+		e.invulnerable = true
+	var hq: Structure = m.tagged("hq")[0]
+	put(engs[0], G.map.world_to_cell(hq.position) + Vector2i(0, 3))
+	engs[0].cmd_enter(hq)
+	await until(func(): return m.is_done("brigade"), 20.0)
+	var rifle := first(0, "rifleman")
+	rifle.invulnerable = true
+	put(rifle, G.map.world_to_cell(m.bunker.position) + Vector2i(0, 3))
+	rifle.cmd_enter(m.bunker)
+	await until(func(): return m.arrested, 20.0)
+	log_msg("brigade=%s arrested=%s" % [m.obj("brigade")["state"], m.arrested])
+	put(engs[1], G.map.world_to_cell(m.core.position) + Vector2i(0, 3))
+	engs[1].cmd_enter(m.core)
+	await until(func(): return m.captured_core, 20.0)
+	log_msg("core captured")
+
+
+# ---------------------------------------------------------------- M10
+
+func solve_m10() -> void:
+	m.lindqvist.invulnerable = true
+	m.kestrel.invulnerable = true
+	first(0, "mcv").deploy()
+	await wait(1.0)
+	kill_tag("guardian")
+	for d in m.dampers:
+		d.invulnerable = true
+		put(d, m.SHAFT + Vector2i(randi_range(-2, 2), 3))
+	put(m.lindqvist, m.SHAFT + Vector2i(0, 5))
+	await until(func(): return m._descend_offered, 10.0)
+	log_msg("base=%s guardians=%s convoy=%s" % [m.obj("base")["state"], m.obj("guardians")["state"], m.obj("convoy")["state"]])
+	m.special_action("descend")
+	await wait(1.0)
+	log_msg("phase=%d underground units=%d" % [m.phase, units().filter(func(u): return m.HEART.has_point(Vector2(u.position.x, u.position.z))).size()])
+	# the one-shot Halo Lance cracks the Choir's shield
+	var up: Structure = m.building("lance_uplink", 0, m.BASE + Vector2i(10, -14))
+	up.sw_charge = 1.0
+	m.fire_player_lance(up, m.choir.position)
+	await wait(4.0)
+	log_msg("lance bonus=%s cracked=%s" % [m.obj("lance")["state"], m.shield_cracked])
+	# a pulse crystallizes anyone outside a shelter
+	var victim := first(0, "rifleman")
+	var safe: Unit = null
+	for u in units():
+		if u.def_id == "rifleman" and u != victim and m.HEART.has_point(Vector2(u.position.x, u.position.z)):
+			safe = u
+			break
+	if victim and safe:
+		victim.invulnerable = false
+		put(victim, m.UNDER_START + Vector2i(6, 12))
+		put(safe, G.map.world_to_cell(m.dampers[0].position) + Vector2i(1, 0))
+		m.next_pulse = m.time + 1.0
+		await wait(5.0)
+		log_msg("pulse: victim alive=%s, sheltered alive=%s" % [is_instance_valid(victim) and victim.alive, is_instance_valid(safe) and safe.alive])
+	for i in 3:
+		var d: Unit = m.dampers[i]
+		put(d, m.CHAMBERS[i])
+		d.deploy()
+		m.chamber_progress[i] = m.INSTALL_TIME - 1.0
+	await until(func(): return m.heartbeat_stopped, 10.0)
+	log_msg("dampers=%s" % m.obj("dampers")["state"])
+	kill([m.core])
+	await wait(1.0)

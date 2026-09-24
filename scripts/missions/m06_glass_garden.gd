@@ -40,10 +40,10 @@ func objective_preview() -> Array:
 
 func theme() -> Dictionary:
 	return {
-		"sky_top": Color(0.02, 0.07, 0.05), "sky_horizon": Color(0.1, 0.35, 0.2),
-		"ground_horizon": Color(0.05, 0.15, 0.08), "ground_bottom": Color(0.01, 0.03, 0.02),
-		"sun_rot": Vector3(-50, 120, 0), "sun_color": Color(0.5, 1.0, 0.65), "sun_energy": 0.45,
-		"ambient": 0.45, "fog_color": Color(0.1, 0.3, 0.18), "fog_density": 0.008, "glow": 1.2, "weather": "spores",
+		"sky_top": Color(0.02, 0.05, 0.05), "sky_horizon": Color(0.08, 0.2, 0.14),
+		"ground_horizon": Color(0.05, 0.1, 0.07), "ground_bottom": Color(0.01, 0.03, 0.02),
+		"sun_rot": Vector3(-50, 120, 0), "sun_color": Color(0.65, 0.95, 0.75), "sun_energy": 0.55,
+		"ambient": 0.3, "fog_color": Color(0.08, 0.2, 0.13), "fog_density": 0.007, "glow": 1.2, "weather": "spores",
 	}
 
 
@@ -74,6 +74,7 @@ func setup() -> void:
 	building("barracks", PLAYER, BASE + Vector2i(-2, 4))
 	building("war_factory", PLAYER, BASE + Vector2i(3, -4))
 	building("inhibitor_pylon", PLAYER, BASE + Vector2i(5, -7))
+	building("radar", PLAYER, BASE + Vector2i(-2, -6))
 	spawn(["rifleman", "rifleman", "rifleman", "rocket_trooper", "rocket_trooper", "medic", "engineer"], PLAYER, BASE + Vector2i(8, -2))
 	spawn(["warden", "warden", "tempest", "resonator"], PLAYER, BASE + Vector2i(9, 2))
 	lindqvist = spawn_one("lindqvist", PLAYER, BASE + Vector2i(6, 0), "lindqvist")

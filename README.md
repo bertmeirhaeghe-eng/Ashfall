@@ -1,66 +1,98 @@
-# Ashfall: Milestone 1 prototype (Godot 4.7)
+# Ashfall (Godot 4.7)
 
-This is the pre-production prototype from the design doc: **harvest, build and fight on one map**.
-You play the Bastion Coalition against a Veil AI. Everything is built in code from primitive meshes,
+A Tiberian Sun-inspired RTS with a full ten-mission Bastion Coalition campaign, built from the
+*Ashfall – Campaign Story & Missions* design. Everything is built in code from primitive meshes,
 so there are no assets to import.
 
 ## Run it
-1. Open Godot 4.7 (4.3 or newer should also work) and choose **Import**, then select `project.godot`.
-2. Press **F5**. The main scene is `scenes/main.tscn`.
+1. Open Godot 4.7 (4.3 or newer should also work), choose **Import** and select `project.godot`.
+2. Press **F5**. The game starts at the main menu: **New Game**, **Continue Game**, **Quit Game**.
 
-Each match generates a new, mirrored map: one crystal field at each base, forward and flank
-fields (the flank fields have a blossom tree), and a contested blue field in the centre.
+**New Game** plays the spoken prologue, then Mission 1's briefing. Progress is saved at the start of
+every mission (`user://ashfall_campaign.json`), so **Continue Game** returns you to the briefing of the
+mission you reached, with every story choice you have made so far.
 
-## What's in M1
-| Area | Implemented |
-|---|---|
-| Economy | Crystal fields regrow, spread slowly and get seeded by blossom trees. Blue crystal is worth about 2×. Harvesters loop between field and refinery on their own and run home when shot. Building a Refinery gives you a free Harvester. |
-| Base building | RA2-style sidebar with Base, Defense, Infantry and Vehicles tabs. You pay as it builds. A finished structure waits as READY until you place it. Buildings must go within 4 cells of your base. Power and low power apply (low power halves build speed and defense fire rate). You can sell and repair. |
-| Tech tree | Construction Yard → Power Plant → Refinery / Barracks → War Factory, plus the Guard Tower. Prerequisites are shown in the tooltips. |
-| Units | Shared: Rifleman, Rocket Trooper, Harvester. Bastion: Pathfinder Mech (scout) and Warden Walker (heavy). Veil: Raider Buggy and Scorpion Tank. |
-| Combat | Armor × warhead table (bullet, rocket, cannon against infantry, light, heavy and structure), with the counter chart in each cameo tooltip. Projectiles home in on targets. Idle units acquire targets and retaliate on a leash. Attack-move works. Veterancy has 3 ranks (Veteran, Elite) with HP, damage and rate-of-fire bonuses and chevrons on the health bar. |
-| Controls | Box and click select, double-click to select all of a type, control groups, rally points, stop, attack-move, formation spread on move. |
-| Camera | Pan with the arrows, screen edge or middle-mouse drag. Zoom with the wheel. Q/E rotate between 4 fixed angles. Click the minimap to jump there, and right-click it to move units. |
-| AI | Follows a build order, keeps power up, rebuilds its core structures, replaces harvesters, defends its base and attacks in waves that grow over time. |
-| Win/Lose | A side loses when it has no structures and no units left. |
+## Voices (text-to-speech)
+Every voice in the game is spoken by the platform text-to-speech engine through Godot's
+`DisplayServer.tts_*` API (`scripts/voice.gd`):
+- **Briefings, the prologue and the epilogue**: each character (Okafor, Havel, Lindqvist, Rourke,
+  Oriel, Kestrel, SIBYL, Tallow, the narrator) has a voice profile: a male/female voice pick where
+  the system has one, plus its own pitch and speaking rate.
+- **Mission dialogue**: radio chatter triggered by events, with subtitles on screen.
+- **Bastion EVA**: "Construction complete", "Unit ready", "Our base is under attack", "Low power"...
+- **Unit reactions** (C&C style): selecting a unit, ordering it to move or to attack makes it answer
+  ("Reporting.", "Moving out.", "Engaging!"). Each unit type has its own lines and voice.
+
+Dialogue has priority over EVA, and EVA over unit chatter, so important lines are never cut off.
+Windows (SAPI) and macOS work out of the box. On Linux, install **speech-dispatcher**
+(`sudo apt install speech-dispatcher`). Without a TTS engine the game still runs: lines are shown as
+subtitles and paced as if spoken.
+
+## The campaign
+| # | Mission | Signature mechanic |
+|---|---|---|
+| 1 | First Light | A glass-storm front sweeps across the map; gather the garrison, save the buses, deploy the MCV before it hits the rail yard |
+| 2 | Blackout Protocol | Follow the power lines: cutting Veil power slows their defenses (75%), makes the cloak flicker (50%) and kills it (0%) |
+| 3 | The Hollow Road | No base. Crystal hurts your troops and heals the Outcasts; lure the convoy into the Maws; spore trees |
+| 4 | Salt and Thunder | Capture the dam, plant charges, then choose when to **BLOW THE DAM**: the valley floods in 30 seconds |
+| 5 | The Pilgrim | A fortress-train with targetable cars, water stations to capture and bridges that reroute it |
+| 6 | The Glass Garden | The crystal bloom grows in real time; powered Inhibitor Pylons push it back; Blue Vitrium chain reactions |
+| 7 | Judgment Hour | Three-beacon, four-minute hold, and the refugee choice that changes the finale and the epilogue |
+| 8 | Ghost in the Lattice | Two-faction command (Veil tab) and SIBYL hijack fields: networked units turn, analog units are immune |
+| 9 | Dead Man's Switch | Mirror match against Rourke on a 40:00 salvo clock while your own Halo Lance fires at you; decoys |
+| 10 | Heart of Glass | Base phase on the rim, then a 30-unit strike force underground; shelter from the Seed's pulses |
+
+Each mission has primary, secondary and bonus objectives (top-left, **O** toggles them). Completing
+every primary objective wins the mission, shows the mission-accomplished screen and loads the next
+briefing. Choices carry forward: Tallow's supply truck (M3), the experimental Resonator (M6), the
+refugees (M7, changes Mission 10 and the epilogue), the Bazaar data node (M8) and Rourke's arrest (M9).
+Tech unlocks follow the design document; each mission's sidebar only offers what you have unlocked.
 
 ## Controls
 | Input | Action |
 |---|---|
-| LMB / drag | Select / box select (Shift adds) |
-| RMB | Move, attack, harvest (harvester on crystal), dock (harvester on refinery), set rally point (factory selected) |
+| LMB / drag | Select / box select (Shift adds, double-click selects all of a type) |
+| RMB | Move, attack, capture (Engineer on a building), board a transport, harvest, dock, set rally point |
+| Ctrl+RMB | Force attack |
 | A then LMB | Attack-move |
-| S | Stop |
+| S / D | Stop / deploy (MCV, dampers, engineers' shelters in M10) or unload a transport |
 | Ctrl+1..9 / 1..9 | Set / recall a group (tap twice to jump the camera) |
 | H / Space | Jump to home base / to the last alert |
-| P / F1 / Esc | Pause / toggle help / cancel mode or deselect |
-| Sidebar LMB / RMB | Queue or place / cancel with a refund |
+| O / F1 / P | Objectives / controls help / pause |
+| Esc or F10 | Cancel, deselect, then the game menu (resume, restart mission, main menu, quit) |
+| Sidebar | LMB queue or place, RMB cancel; special actions (BLOW THE DAM, Harden network, Halo Lance, DESCEND) appear above Sell / Repair |
 
 ## Project layout
 ```
-data/rules.json        all balance data (units, weapons, warheads, crystal, economy)
-scripts/g.gd           autoload "G": rules, players, entity registry, spawning, placement
-scripts/map_grid.gd    map generation, AStarGrid2D pathing, crystal growth, ground and crystal visuals
-scripts/entity.gd      shared health, armor, weapon and veterancy
-scripts/unit.gd        movement and orders;  harvester.gd  harvest state machine
-scripts/structure.gd   footprint, power, defense turret, repair and sell
-scripts/player_state.gd credits, power, production queues
-scripts/ai_controller.gd skirmish AI
-scripts/input_controller.gd selection and orders;  rts_camera.gd  camera
-scripts/hud.gd, overlay.gd, minimap.gd  UI
-scripts/mesh_factory.gd placeholder models (swap for real art using the same metadata contract)
-scripts/fx.gd, projectile.gd  effects
+data/rules.json              all balance data (units, structures, weapons, warheads, crystal)
+scenes/menu.tscn             main menu (entry point)
+scenes/story.tscn            prologue / briefing / epilogue screen
+scenes/main.tscn             the game; loads the current mission
+scripts/campaign.gd          autoload "Campaign": mission list, briefings, unlocks, save file, flags
+scripts/voice.gd             autoload "Voice": text-to-speech, speaker profiles, unit reactions, EVA
+scripts/g.gd                 autoload "G": rules, teams, entities, spawning, placement, detection
+scripts/missions/mission.gd  mission base class: objectives, triggers, dialogue, win/lose
+scripts/missions/m01..m10    the ten missions (+ glass_storm.gd, train_car.gd)
+scripts/map_grid.gd          map painter API, terrain (rock, water, forest, city), ground + hover pathing
+scripts/entity.gd, unit.gd, structure.gd, harvester.gd, player_state.gd, ai_controller.gd
+scripts/hud.gd, overlay.gd, minimap.gd, input_controller.gd, ui/*  interface
+scripts/dev/test_runner.gd, mission_solver.gd   automated tests
 ```
-**Tweaking balance:** edit `data/rules.json`. To add a unit, add an entry that references a `model`
-key from `mesh_factory.gd`. It shows up in the sidebar automatically.
 
-**Exporting:** add `*.json` to *Export → Resources → Filters to export non-resource files*,
-otherwise `rules.json` is left out of the build.
+## Tests
+The same harness runs locally and in CI (`.github/workflows/build.yml`):
+```
+godot --headless --path . --fixed-fps 30 --quit-after 250000 -- --test=campaign   # all ten missions, briefings, epilogue
+godot --headless --path . --fixed-fps 30 --quit-after 120000 -- --test=smoke      # each mission runs 150 s unattended
+godot --headless --path . --fixed-fps 30 --quit-after 30000  -- --test=m6         # one mission's scripted solution
+godot --path . -- --mission=4                                                     # jump straight into a mission
+```
+The scripted solutions take shortcuts (teleporting units, removing targets) but every objective is
+still completed through the mission's own triggers. Test runs never touch your save file.
 
-## Known limits (deliberately deferred)
-- No fog of war or shroud, and no air or naval units yet.
-- Flat terrain. High-ground bonuses come later.
-- The simulation isn't deterministic yet, so there's no multiplayer. It needs a fixed-point lockstep layer.
-- Units only push each other apart (they don't use RVO avoidance). Large blobs can jostle in chokepoints.
-- No audio yet.
-- Placeholder art: every model is built from primitive meshes.
+**Exporting:** `*.json` is already in the export presets' include filter so `rules.json` ships.
+
+## Known limits
+- Placeholder art: every model is built from primitive meshes. No music or sound effects, only voices.
+- No full fog of war; stealth, darkness and the Mission 9 blizzard hide units instead.
+- Flat terrain. Units push each other apart but don't use RVO avoidance.

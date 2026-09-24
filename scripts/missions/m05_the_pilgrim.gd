@@ -102,6 +102,7 @@ func setup() -> void:
 	building("refinery", PLAYER, BASE + Vector2i(3, -5))
 	building("barracks", PLAYER, BASE + Vector2i(3, 2))
 	building("war_factory", PLAYER, BASE + Vector2i(-1, 5))
+	building("radar", PLAYER, BASE + Vector2i(-6, -5))
 	spawn(["engineer", "engineer", "engineer", "rifleman", "rifleman", "rifleman", "rocket_trooper", "rocket_trooper", "medic"], PLAYER, BASE + Vector2i(7, 0))
 	spawn(["tempest", "tempest", "warden", "warden", "apc"], PLAYER, BASE + Vector2i(8, -4))
 	for c in STATIONS:

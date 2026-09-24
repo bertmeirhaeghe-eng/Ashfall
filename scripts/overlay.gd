@@ -10,7 +10,7 @@ const RED := Color(1.0, 0.25, 0.2)
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	process_mode = Node.PROCESS_MODE_ALWAYS
 
 
@@ -85,7 +85,7 @@ func _draw_bars(e, sp: Vector2) -> void:
 		var r3 := Rect2(r.position.x, r.position.y - 6, w * e.hijack, 3)
 		draw_rect(r3, Color(0.5, 1.0, 0.6) if int(G.elapsed * 6.0) % 2 == 0 else Color(1.0, 0.3, 0.9), true)
 	if e.def.get("hero", false):
-		draw_string(get_theme_default_font(), Vector2(sp.x - 40, sp.y - 8), e.display_name(), HORIZONTAL_ALIGNMENT_CENTER, 80, 11, Color(1, 0.9, 0.5))
+		draw_string(get_theme_default_font(), Vector2(sp.x - 90, sp.y - 8), e.display_name(), HORIZONTAL_ALIGNMENT_CENTER, 180, 11, Color(1, 0.9, 0.5))
 	# repair wrench blink
 	if e is Structure and e.repairing and int(G.elapsed * 3.0) % 2 == 0:
 		draw_string(get_theme_default_font(), Vector2(sp.x - 5, sp.y - 6), "+", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, GREEN)

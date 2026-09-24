@@ -22,7 +22,6 @@ var towers: Array = []
 var tower_rings: Array = []
 var reboots := 0
 var node: Structure
-var harden_ready_t := 0.0
 var _check_t := 0.0
 var _wave_t := 100.0
 var _twist := false
@@ -168,7 +167,7 @@ func begin() -> void:
 	add_objective("gate", "Protect the Istanbul Clear Zone's main gate.", "primary", true, true)
 	add_objective("reboot", "Recapture hijacked Bastion units with Engineers instead of destroying them (0/3).", "secondary")
 	add_objective("node", "Find the hidden SIBYL data node under the Grand Bazaar.", "bonus")
-	G.hud.add_special("harden", "Harden network (30s)")
+	enable_harden()
 	for i in towers.size():
 		add_marker("relay%d" % i, towers[i].position, Color(0.5, 1.0, 0.6))
 	focus(BASE + Vector2i(0, -8))
@@ -186,8 +185,7 @@ func tick(delta: float) -> void:
 		if is_instance_valid(r):
 			var m := r.material_override as StandardMaterial3D
 			m.albedo_color.a = 0.35 + 0.3 * absf(sin(time * 2.0))
-	var cd := harden_ready_t - time
-	G.hud.set_special("harden", "Harden network (30s)" if cd <= 0.0 else "Harden recharging %ds" % int(cd), cd <= 0.0)
+	update_harden()
 	_check_t -= delta
 	if _check_t > 0.0:
 		return
@@ -246,17 +244,6 @@ func _hijack(delta: float) -> void:
 				say_once("first_hijack", "havel", "We just lost control of a unit! SIBYL has it. Get it back with an Engineer, or kill that tower.")
 		else:
 			e.hijack = maxf(0.0, e.hijack - delta / HIJACK_TIME)
-
-
-func special_action(id: String) -> void:
-	if id == "harden" and time >= harden_ready_t:
-		harden_ready_t = time + 120.0
-		for u in team_units(PLAYER):
-			if u.def.get("networked", false):
-				u.tags["hardened_until"] = time + 30.0
-				u.hijack = 0.0
-				Fx.ring(u.position, Color(0.5, 0.8, 1.0), 1.2, 0.6)
-		G.notify(PLAYER, "Networked units hardened for 30 seconds.")
 
 
 func can_interact(u: Unit, t: Entity) -> bool:

@@ -43,16 +43,16 @@ func objective_preview() -> Array:
 
 func theme() -> Dictionary:
 	return {
-		"sky_top": Color(0.35, 0.5, 0.7), "sky_horizon": Color(0.95, 0.85, 0.65),
-		"ground_horizon": Color(0.8, 0.68, 0.5), "sun_rot": Vector3(-72, 40, 0),
-		"sun_color": Color(1.0, 0.95, 0.82), "sun_energy": 1.6, "ambient": 0.8,
-		"fog_color": Color(0.9, 0.8, 0.62), "fog_density": 0.003, "exposure": 1.05,
+		"sky_top": Color(0.28, 0.4, 0.58), "sky_horizon": Color(0.7, 0.6, 0.45),
+		"ground_horizon": Color(0.5, 0.42, 0.3), "sun_rot": Vector3(-72, 40, 0),
+		"sun_color": Color(1.0, 0.93, 0.8), "sun_energy": 1.1, "ambient": 0.35,
+		"fog_color": Color(0.75, 0.65, 0.5), "fog_density": 0.002, "exposure": 0.9,
 	}
 
 
 func build_map(map: MapGrid) -> void:
 	map.init_blank(W, H, 4404, {
-		"ground": Color(0.66, 0.54, 0.37), "rock": Color(0.52, 0.4, 0.28), "water": Color(0.12, 0.35, 0.42),
+		"ground": Color(0.44, 0.35, 0.24), "rock": Color(0.36, 0.27, 0.19), "water": Color(0.12, 0.35, 0.42),
 		"variation": 0.04,
 	})
 	map.scatter(MapGrid.Terrain.ROCK, 16, 1.2, 2.6, [[BASE, 12], [DAM_CTRL, 5], [NOMADS, 6], [EVAC, 4], [Vector2i(56, 40), 14]])
@@ -75,9 +75,9 @@ func build_map(map: MapGrid) -> void:
 					riverbed.erase(Vector2i(x, y))
 	for c in riverbed.keys():
 		map.set_terrain(c, MapGrid.Terrain.GROUND)
-		map.tints[c] = Color(0.5, 0.42, 0.3)
+		map.tints[c] = Color(0.4, 0.33, 0.23)
 	for isl in ISLANDS:
-		map.tint_blob(isl, 3.2, Color(0.72, 0.6, 0.42))
+		map.tint_blob(isl, 3.2, Color(0.56, 0.46, 0.32))
 	# reservoir and dam wall
 	map.fill_rect(Rect2i(36, 1, 40, 5), MapGrid.Terrain.WATER)
 	map.fill_rect(Rect2i(44, 6, 22, 2), MapGrid.Terrain.ROCK)
