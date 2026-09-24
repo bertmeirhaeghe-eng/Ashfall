@@ -194,9 +194,9 @@ func on_damaged() -> void:
 
 
 func _animate(delta: float) -> void:
-	var cutter: Node3D = model.get_meta("cutter", null)
-	if cutter and (_moving or hstate == HState.HARVESTING):
+	if model.has_meta("cutter") and (_moving or hstate == HState.HARVESTING):
+		var cutter: Node3D = model.get_meta("cutter")
 		cutter.rotation.x += delta * 8.0
-	var bin: Node3D = model.get_meta("bin", null)
-	if bin:
+	if model.has_meta("bin"):
+		var bin: Node3D = model.get_meta("bin")
 		bin.scale.y = lerpf(bin.scale.y, 0.3 + 0.7 * cargo / capacity, minf(1.0, delta * 4.0))

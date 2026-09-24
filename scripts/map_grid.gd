@@ -481,6 +481,7 @@ func _build_visuals() -> void:
 	for k in [0, 1, 2, 0, 2, 3]:
 		st.set_normal(Vector3.UP)
 		st.set_uv(uvs[k])
+		st.set_uv2(Vector2(corners[k].x, corners[k].z) / 9.0)
 		st.add_vertex(corners[k])
 	var ground := MeshInstance3D.new()
 	ground.name = "Ground"
@@ -490,6 +491,11 @@ func _build_visuals() -> void:
 	gm.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR
 	gm.roughness = 0.95
 	gm.cull_mode = BaseMaterial3D.CULL_DISABLED
+	# tiling dirt / scrub-grass detail on top of the per-cell colours (TS temperate look)
+	gm.detail_enabled = true
+	gm.detail_albedo = _ground_detail()
+	gm.detail_blend_mode = BaseMaterial3D.BLEND_MODE_MUL
+	gm.detail_uv_layer = BaseMaterial3D.DETAIL_UV_2
 	ground.material_override = gm
 	add_child(ground)
 
@@ -508,15 +514,35 @@ func _build_visuals() -> void:
 	_build_rocks()
 	_build_trees()
 
-	var shard := CylinderMesh.new()
-	shard.top_radius = 0.0
-	shard.bottom_radius = 0.11
-	shard.height = 0.6
-	shard.radial_segments = 5
-	shard.rings = 1
-	_mm_green = _make_crystal_mmi(shard, Color(0.25, 1.0, 0.35), Color(0.1, 0.5, 0.15))
-	_mm_blue = _make_crystal_mmi(shard, Color(0.3, 0.6, 1.0), Color(0.1, 0.25, 0.6))
+	var shard := MeshFactory.mesh("tiberium")
+	_mm_green = _make_crystal_mmi(shard, Color(0.15, 0.9, 0.25), Color(0.1, 0.5, 0.15))
+	_mm_blue = _make_crystal_mmi(shard, Color(0.2, 0.5, 1.0), Color(0.1, 0.25, 0.6))
 	_rebuild_crystal_meshes()
+
+
+func _ground_detail() -> Texture2D:
+	var size := 256
+	var patches := FastNoiseLite.new()
+	patches.seed = 4
+	patches.frequency = 0.012
+	patches.fractal_octaves = 4
+	var grain := FastNoiseLite.new()
+	grain.seed = 9
+	grain.noise_type = FastNoiseLite.TYPE_CELLULAR
+	grain.frequency = 0.09
+	var pi := patches.get_seamless_image(size, size)
+	var gi := grain.get_seamless_image(size, size)
+	var img := Image.create_empty(size, size, false, Image.FORMAT_RGB8)
+	var dirt := Color(1.0, 0.95, 0.86)
+	var grass := Color(0.82, 0.9, 0.68)
+	for y in size:
+		for x in size:
+			var p := smoothstep(0.35, 0.75, pi.get_pixel(x, y).r)
+			var g := gi.get_pixel(x, y).r
+			var c := dirt.lerp(grass, p) * (0.86 + 0.14 * g)
+			img.set_pixel(x, y, c)
+	img.generate_mipmaps()
+	return ImageTexture.create_from_image(img)
 
 
 func _make_crystal_mmi(mesh: Mesh, glow: Color, base: Color) -> MultiMeshInstance3D:
@@ -526,7 +552,8 @@ func _make_crystal_mmi(mesh: Mesh, glow: Color, base: Color) -> MultiMeshInstanc
 	mat.roughness = 0.15
 	mat.emission_enabled = true
 	mat.emission = glow
-	mat.emission_energy_multiplier = 1.6
+	mat.emission_energy_multiplier = 0.7
+	mat.vertex_color_use_as_albedo = true
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.mesh = mesh
@@ -556,7 +583,7 @@ func _rebuild_crystal_meshes() -> void:
 			var s := (0.45 + frac * 0.75) * (0.8 + float(hk % 7) * 0.06)
 			var bs := Basis(Vector3.UP, yaw) * Basis(Vector3.RIGHT, tilt)
 			bs = bs.scaled(Vector3(s, s * 1.2, s))
-			var t := Transform3D(bs, Vector3(c.x + 0.5 + ox, 0.25 * s, c.y + 0.5 + oz))
+			var t := Transform3D(bs, Vector3(c.x + 0.5 + ox, 0.0, c.y + 0.5 + oz))
 			if crystal_kind[i] == Crystal.BLUE:
 				blue.append(t)
 			else:
@@ -578,9 +605,9 @@ func _paint_ground() -> void:
 		for y in h:
 			var i := y * w + x
 			var n := _noise.get_noise_2d(x * 1.7, y * 1.7) * 0.05
-			var col := Color(0.34 + n, 0.30 + n, 0.25 + n)
+			var col := Color(0.4 + n, 0.37 + n, 0.29 + n)
 			if terrain[i] == Terrain.ROCK:
-				col = Color(0.2 + n, 0.18 + n, 0.16 + n)
+				col = Color(0.27 + n, 0.25 + n, 0.22 + n)
 			elif crystal[i] > 0.0:
 				var k := clampf(crystal[i] / _max_for(crystal_kind[i]), 0.2, 1.0)
 				var tint := Color(0.16, 0.32, 0.12) if crystal_kind[i] == Crystal.GREEN else Color(0.12, 0.2, 0.38)
@@ -591,11 +618,7 @@ func _paint_ground() -> void:
 
 
 func _build_rocks() -> void:
-	var rock_mesh := SphereMesh.new()
-	rock_mesh.radius = 0.5
-	rock_mesh.height = 1.0
-	rock_mesh.radial_segments = 7
-	rock_mesh.rings = 4
+	var rock_mesh := MeshFactory.mesh("rock")
 	var cells: Array = []
 	for x in w:
 		for y in h:
@@ -609,46 +632,18 @@ func _build_rocks() -> void:
 		var c: Vector2i = cells[i]
 		var hk := hash(c)
 		var sx := 1.1 + float(hk % 5) * 0.08
-		var sy := 0.7 + float((hk / 5) % 9) * 0.12
+		var sy := 0.45 + float((hk / 5) % 9) * 0.09
 		var b := Basis(Vector3.UP, float(hk % 628) / 100.0).scaled(Vector3(sx, sy, sx))
-		mm.set_instance_transform(i, Transform3D(b, Vector3(c.x + 0.5, sy * 0.25, c.y + 0.5)))
+		mm.set_instance_transform(i, Transform3D(b, Vector3(c.x + 0.5, -0.03, c.y + 0.5)))
 	var mmi := MultiMeshInstance3D.new()
 	mmi.multimesh = mm
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.26, 0.23, 0.21)
-	mat.roughness = 1.0
-	mmi.material_override = mat
+	mmi.material_override = MeshFactory.mat(Color(0.34, 0.32, 0.29), 0.0, 0.95, 0.0)
 	add_child(mmi)
 
 
 func _build_trees() -> void:
 	for b in blossoms:
-		var root := Node3D.new()
-		root.position = cell_to_world(b)
-		add_child(root)
-		var trunk := MeshInstance3D.new()
-		var tm := CylinderMesh.new()
-		tm.top_radius = 0.12
-		tm.bottom_radius = 0.3
-		tm.height = 1.6
-		trunk.mesh = tm
-		trunk.position.y = 0.8
-		var bark := StandardMaterial3D.new()
-		bark.albedo_color = Color(0.2, 0.25, 0.15)
-		trunk.material_override = bark
-		root.add_child(trunk)
-		var pod_mat := StandardMaterial3D.new()
-		pod_mat.albedo_color = Color(0.2, 0.6, 0.2)
-		pod_mat.emission_enabled = true
-		pod_mat.emission = Color(0.3, 1.0, 0.3)
-		pod_mat.emission_energy_multiplier = 1.2
-		for k in 5:
-			var pod := MeshInstance3D.new()
-			var sm := SphereMesh.new()
-			sm.radius = 0.28
-			sm.height = 0.5
-			pod.mesh = sm
-			var a: float = TAU * k / 5.0
-			pod.position = Vector3(cos(a) * 0.35, 1.5 + 0.15 * (k % 2), sin(a) * 0.35)
-			pod.material_override = pod_mat
-			root.add_child(pod)
+		var tree := MeshFactory.build("blossom_tree", Color(0.3, 1.0, 0.4), "")
+		tree.position = cell_to_world(b)
+		tree.rotation.y = float(hash(b) % 628) / 100.0
+		add_child(tree)

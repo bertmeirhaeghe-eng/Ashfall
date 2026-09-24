@@ -175,7 +175,7 @@ func _physics_process(delta: float) -> void:
 	_last_pos = position
 
 
-func _target_ok(t: Entity) -> bool:
+func _target_ok(t) -> bool:  # untyped: t may already be freed
 	return is_instance_valid(t) and t.alive
 
 
@@ -274,5 +274,6 @@ func _animate(delta: float) -> void:
 	elif model.has_meta("walker"):
 		model.position.y = absf(sin(_anim_t * 6.0)) * 0.06
 		var legs: Array = model.get_meta("legs", [])
+		var swing := float(model.get_meta("leg_swing", 0.4))
 		for i in legs.size():
-			legs[i].rotation.x = sin(_anim_t * 6.0 + PI * i) * 0.4
+			legs[i].rotation.x = sin(_anim_t * 6.0 + PI * i) * swing
