@@ -1,10 +1,12 @@
 class_name MapGrid
 extends Node3D
 ## The battlefield: a cell grid with terrain, crystal fields, pathfinding and
-## the visuals for ground, rocks, blossom trees and crystals.
+## the visuals for ground, rocks, forest, city blocks, water and crystals.
 ## One cell == one world unit. Cell (x, y) covers world X in [x, x+1), Z in [y, y+1).
+## Missions build the map with the painter API (fill_rect, blob, line, crystal_field ...)
+## and then call finalize().
 
-enum Terrain { GROUND = 0, ROCK = 1, TREE = 2 }
+enum Terrain { GROUND = 0, ROCK = 1, WATER = 3, FOREST = 4, BUILDING = 5, BRIDGE = 6 }
 enum Crystal { NONE = 0, GREEN = 1, BLUE = 2 }
 
 var w := 80
@@ -14,10 +16,21 @@ var crystal := PackedFloat32Array()
 var crystal_kind := PackedByteArray()
 var occupant: Array = []            # Structure or null per cell
 var crystal_cells := {}             # Vector2i -> true
-var blossoms: Array = []            # Array of Vector2i
-var base_cells: Array = []          # Array of Vector2i, index == team
+var blossoms: Array = []            # Array of Vector2i (crystal seeders)
+var tints := {}                     # Vector2i -> Color (roads, rails, snow ...)
 
-var astar := AStarGrid2D.new()
+var palette := {
+	"ground": Color(0.34, 0.30, 0.25), "rock": Color(0.26, 0.23, 0.21),
+	"water": Color(0.1, 0.22, 0.28), "forest": Color(0.13, 0.2, 0.11),
+	"building": Color(0.3, 0.3, 0.32), "variation": 0.05,
+	"tree": Color(0.14, 0.26, 0.12), "block": Color(0.36, 0.35, 0.37),
+}
+var growth_enabled := true
+var spread_enabled := true
+var redraw_interval := 0.5
+
+var astar := AStarGrid2D.new()        # ground units
+var astar_hover := AStarGrid2D.new()  # hover / amphibious units
 var rng := RandomNumberGenerator.new()
 
 var ground_img: Image
@@ -25,12 +38,17 @@ var ground_tex: ImageTexture
 var _noise := FastNoiseLite.new()
 var _mm_green: MultiMeshInstance3D
 var _mm_blue: MultiMeshInstance3D
+var _mm_water: MultiMeshInstance3D
 var _crystal_dirty := true
+var _water_dirty := false
+var _terrain_dirty := false
 var _redraw_t := 0.0
 var _grow_t := 0.0
 var _spread_t := 0.0
 var _blossom_t := 0.0
 var _cr: Dictionary = {}
+var _finalized := false
+var _static_nodes: Array = []
 
 
 # ================================================================ helpers
@@ -43,11 +61,38 @@ func in_bounds(c: Vector2i) -> bool:
 	return c.x >= 0 and c.y >= 0 and c.x < w and c.y < h
 
 
+func terrain_at(c: Vector2i) -> int:
+	if not in_bounds(c):
+		return Terrain.ROCK
+	return terrain[idx(c)]
+
+
+## Ground-unit walkability (also used for building placement).
 func is_walkable(c: Vector2i) -> bool:
 	if not in_bounds(c):
 		return false
 	var i := idx(c)
-	return terrain[i] == Terrain.GROUND and occupant[i] == null
+	var t := terrain[i]
+	return (t == Terrain.GROUND or t == Terrain.BRIDGE) and occupant[i] == null
+
+
+## Walkability for a movement class: ground | hover | air | jump.
+func passable(c: Vector2i, mc := "ground") -> bool:
+	if not in_bounds(c):
+		return false
+	if mc == "air" or mc == "jump":
+		return true
+	var i := idx(c)
+	if occupant[i] != null:
+		return false
+	var t := terrain[i]
+	if t == Terrain.GROUND or t == Terrain.BRIDGE:
+		return true
+	return mc == "hover" and t == Terrain.WATER
+
+
+func is_water(c: Vector2i) -> bool:
+	return terrain_at(c) == Terrain.WATER
 
 
 func cell_to_world(c: Vector2i) -> Vector3:
@@ -58,14 +103,16 @@ func world_to_cell(p: Vector3) -> Vector2i:
 	return Vector2i(floori(p.x), floori(p.z))
 
 
-func mirror(c: Vector2i) -> Vector2i:
-	return Vector2i(w - 1 - c.x, h - 1 - c.y)
-
-
 func crystal_at(c: Vector2i) -> float:
 	if not in_bounds(c):
 		return 0.0
 	return crystal[idx(c)]
+
+
+func crystal_kind_at(c: Vector2i) -> int:
+	if not in_bounds(c):
+		return Crystal.NONE
+	return crystal_kind[idx(c)]
 
 
 func occupant_at(c: Vector2i) -> Variant:
@@ -82,13 +129,20 @@ func set_occupant(c: Vector2i, s: Variant) -> void:
 
 
 func _refresh_solid(c: Vector2i) -> void:
-	astar.set_point_solid(c, not is_walkable(c))
+	if not _finalized:
+		return
+	astar.set_point_solid(c, not passable(c, "ground"))
+	astar_hover.set_point_solid(c, not passable(c, "hover"))
 
 
-# ================================================================ generation
+# ================================================================ painter API
 
-func generate(seed_value: int) -> void:
+func init_blank(p_w: int, p_h: int, seed_value: int, p_palette: Dictionary = {}) -> void:
 	_cr = G.rules.get("crystal", {})
+	w = p_w
+	h = p_h
+	for k in p_palette.keys():
+		palette[k] = p_palette[k]
 	rng.seed = seed_value
 	_noise.seed = seed_value
 	_noise.frequency = 0.08
@@ -103,102 +157,127 @@ func generate(seed_value: int) -> void:
 	occupant.fill(null)
 	crystal_cells.clear()
 	blossoms.clear()
-
-	base_cells = [Vector2i(14, h - 15), mirror(Vector2i(14, h - 15))]
-
-	# --- rock outcrops and ridges (every feature is mirrored for fairness)
-	for i in 10:
-		var c := Vector2i(rng.randi_range(6, w - 7), rng.randi_range(6, h - 7))
-		_rock_blob(c, rng.randf_range(1.5, 3.4))
-	for i in 4:
-		_rock_ridge(Vector2i(rng.randi_range(10, w - 11), rng.randi_range(10, h - 11)), rng.randi_range(8, 15))
-	# map edge rim
+	tints.clear()
+	# rock rim around the edge
 	for x in w:
 		for y in h:
 			var edge_d := mini(mini(x, y), mini(w - 1 - x, h - 1 - y))
-			if edge_d == 0 or (edge_d == 1 and _noise.get_noise_2d(x, y) > 0.1):
-				_set_rock_sym(Vector2i(x, y))
-
-	# --- keep bases clear
-	for b in base_cells:
-		_clear_rocks(b, 10.0)
-
-	# --- crystal fields: [center, radius, kind, blossom]
-	var fields := [
-		[Vector2i(24, h - 25), 3.6, Crystal.GREEN, false],   # home field
-		[Vector2i(14, 30), 3.0, Crystal.GREEN, true],        # flank field with blossom tree
-		[Vector2i(40, h - 13), 3.0, Crystal.GREEN, false],   # forward field
-	]
-	for f in fields:
-		_crystal_field(f[0], f[1], f[2], f[3])
-		_crystal_field(mirror(f[0]), f[1], f[2], f[3])
-	# contested blue field in the dead centre (symmetric by construction)
-	_crystal_field(Vector2i(w / 2, h / 2), 2.6, Crystal.BLUE, false)
-
-	# --- pathfinding
-	astar.region = Rect2i(0, 0, w, h)
-	astar.cell_size = Vector2(1, 1)
-	astar.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_ONLY_IF_NO_OBSTACLES
-	astar.default_compute_heuristic = AStarGrid2D.HEURISTIC_OCTILE
-	astar.default_estimate_heuristic = AStarGrid2D.HEURISTIC_OCTILE
-	astar.update()
-	for x in w:
-		for y in h:
-			_refresh_solid(Vector2i(x, y))
-
-	# --- guarantee connectivity between bases and to every field
-	_ensure_route(base_cells[0], base_cells[1])
-	for f in fields:
-		_ensure_route(base_cells[0], f[0])
-		_ensure_route(base_cells[1], mirror(f[0]))
-	_ensure_route(base_cells[0], Vector2i(w / 2, h / 2))
-	_ensure_route(base_cells[1], Vector2i(w / 2, h / 2))
-
-	_build_visuals()
+			if edge_d == 0:
+				terrain[idx(Vector2i(x, y))] = Terrain.ROCK
 
 
-func _set_rock_sym(c: Vector2i) -> void:
-	for cc in [c, mirror(c)]:
-		if in_bounds(cc):
-			terrain[idx(cc)] = Terrain.ROCK
+func set_terrain(c: Vector2i, t: int) -> void:
+	if not in_bounds(c):
+		return
+	var i := idx(c)
+	if terrain[i] == t:
+		return
+	var was_water := terrain[i] == Terrain.WATER
+	terrain[i] = t
+	if t != Terrain.GROUND and t != Terrain.BRIDGE and crystal[i] > 0.0:
+		_remove_crystal(c)
+	if was_water or t == Terrain.WATER:
+		_water_dirty = true
+	_terrain_dirty = true
+	_refresh_solid(c)
 
 
-func _rock_blob(center: Vector2i, r: float) -> void:
-	var ri := ceili(r) + 1
+func fill_rect(r: Rect2i, t: int) -> void:
+	for x in range(r.position.x, r.end.x):
+		for y in range(r.position.y, r.end.y):
+			set_terrain(Vector2i(x, y), t)
+
+
+func blob(center: Vector2i, r: float, t: int, rough := 1.2) -> void:
+	var ri := ceili(r + rough) + 1
 	for x in range(center.x - ri, center.x + ri + 1):
 		for y in range(center.y - ri, center.y + ri + 1):
 			var d := Vector2(x - center.x, y - center.y).length()
-			if d <= r + _noise.get_noise_2d(x * 3.0, y * 3.0) * 1.2:
-				_set_rock_sym(Vector2i(x, y))
+			if d <= r + _noise.get_noise_2d(x * 3.0, y * 3.0) * rough:
+				set_terrain(Vector2i(x, y), t)
 
 
-func _rock_ridge(start: Vector2i, length: int) -> void:
-	var p := Vector2(start)
-	var dir := Vector2.RIGHT.rotated(rng.randf() * TAU)
-	for i in length:
-		_set_rock_sym(Vector2i(p))
-		_set_rock_sym(Vector2i(p + dir.orthogonal()))
-		dir = dir.rotated(rng.randf_range(-0.5, 0.5))
-		p += dir
+## Thick line of terrain between points (rivers, ridges, walls).
+func line(a: Vector2i, b: Vector2i, width: float, t: int, rough := 0.0) -> void:
+	var steps := int(Vector2(a).distance_to(Vector2(b)) * 2.0) + 1
+	for i in steps + 1:
+		var q := Vector2(a).lerp(Vector2(b), float(i) / steps)
+		var wr := width * 0.5 + _noise.get_noise_2d(q.x * 2.0, q.y * 2.0) * rough
+		var ri := ceili(wr) + 1
+		for x in range(int(q.x) - ri, int(q.x) + ri + 1):
+			for y in range(int(q.y) - ri, int(q.y) + ri + 1):
+				if Vector2(x + 0.5, y + 0.5).distance_to(q + Vector2(0.5, 0.5)) <= wr:
+					set_terrain(Vector2i(x, y), t)
 
 
-func _clear_rocks(center: Vector2i, r: float) -> void:
+func polyline(pts: Array, width: float, t: int, rough := 0.0) -> void:
+	for i in range(pts.size() - 1):
+		line(pts[i], pts[i + 1], width, t, rough)
+
+
+## Colour tint for decorative ground (roads, rails, snow, sand).
+func tint_line(a: Vector2i, b: Vector2i, width: float, col: Color) -> void:
+	var steps := int(Vector2(a).distance_to(Vector2(b)) * 2.0) + 1
+	for i in steps + 1:
+		var q := Vector2(a).lerp(Vector2(b), float(i) / steps)
+		var ri := ceili(width * 0.5) + 1
+		for x in range(int(q.x) - ri, int(q.x) + ri + 1):
+			for y in range(int(q.y) - ri, int(q.y) + ri + 1):
+				if Vector2(x, y).distance_to(q) <= width * 0.5:
+					var c := Vector2i(x, y)
+					if in_bounds(c):
+						tints[c] = col
+	_terrain_dirty = true
+
+
+func tint_polyline(pts: Array, width: float, col: Color) -> void:
+	for i in range(pts.size() - 1):
+		tint_line(pts[i], pts[i + 1], width, col)
+
+
+func tint_blob(center: Vector2i, r: float, col: Color) -> void:
+	var ri := ceili(r) + 1
+	for x in range(center.x - ri, center.x + ri + 1):
+		for y in range(center.y - ri, center.y + ri + 1):
+			var c := Vector2i(x, y)
+			if in_bounds(c) and Vector2(x - center.x, y - center.y).length() <= r + _noise.get_noise_2d(x * 3.0, y * 3.0):
+				tints[c] = col
+	_terrain_dirty = true
+
+
+func clear_area(center: Vector2i, r: float) -> void:
 	var ri := ceili(r)
 	for x in range(center.x - ri, center.x + ri + 1):
 		for y in range(center.y - ri, center.y + ri + 1):
 			var c := Vector2i(x, y)
 			if not in_bounds(c) or Vector2(x - center.x, y - center.y).length() > r:
 				continue
-			for cc in [c, mirror(c)]:
-				var edge_d := mini(mini(cc.x, cc.y), mini(w - 1 - cc.x, h - 1 - cc.y))
-				if edge_d > 0 and terrain[idx(cc)] == Terrain.ROCK:
-					terrain[idx(cc)] = Terrain.GROUND
+			var edge_d := mini(mini(c.x, c.y), mini(w - 1 - c.x, h - 1 - c.y))
+			if edge_d > 0 and terrain[idx(c)] != Terrain.GROUND:
+				set_terrain(c, Terrain.GROUND)
 
 
-func _crystal_field(center: Vector2i, r: float, kind: int, blossom: bool) -> void:
-	_clear_rocks(center, r + 2.0)
-	var mx := float(_cr.get("green_max", 300)) if kind == Crystal.GREEN else float(_cr.get("blue_max", 600))
-	var ri := ceili(r)
+## Scatter random rock outcrops, avoiding a list of [center, radius] keep-clear zones.
+func scatter(t: int, count: int, rmin: float, rmax: float, keep_clear: Array = []) -> void:
+	var tries := 0
+	var placed := 0
+	while placed < count and tries < count * 20:
+		tries += 1
+		var c := Vector2i(rng.randi_range(3, w - 4), rng.randi_range(3, h - 4))
+		var ok := true
+		for k in keep_clear:
+			if Vector2(c).distance_to(Vector2(k[0])) < float(k[1]) + rmax:
+				ok = false
+				break
+		if not ok:
+			continue
+		blob(c, rng.randf_range(rmin, rmax), t)
+		placed += 1
+
+
+func crystal_field(center: Vector2i, r: float, kind: int, density_mult := 1.0) -> void:
+	var mx := _max_for(kind)
+	var ri := ceili(r) + 1
 	for x in range(center.x - ri, center.x + ri + 1):
 		for y in range(center.y - ri, center.y + ri + 1):
 			var c := Vector2i(x, y)
@@ -207,54 +286,52 @@ func _crystal_field(center: Vector2i, r: float, kind: int, blossom: bool) -> voi
 			var d := Vector2(x - center.x, y - center.y).length()
 			if d > r + _noise.get_noise_2d(x * 2.0, y * 2.0) * 0.8:
 				continue
-			var density := clampf(1.0 - d / (r + 1.0), 0.3, 1.0)
-			_add_crystal(c, kind, mx * density)
-	if blossom:
-		var i := idx(center)
-		_remove_crystal(center)
-		terrain[i] = Terrain.TREE
-		blossoms.append(center)
+			var density := clampf(1.0 - d / (r + 1.0), 0.3, 1.0) * density_mult
+			add_crystal(c, kind, mx * clampf(density, 0.1, 1.0))
 
 
-func _add_crystal(c: Vector2i, kind: int, amount: float) -> void:
-	var i := idx(c)
-	crystal_kind[i] = kind
-	crystal[i] = amount
-	crystal_cells[c] = true
-	_crystal_dirty = true
-
-
-func _remove_crystal(c: Vector2i) -> void:
-	var i := idx(c)
-	crystal[i] = 0.0
-	crystal_kind[i] = Crystal.NONE
-	crystal_cells.erase(c)
-	_crystal_dirty = true
-
-
-func _ensure_route(a: Vector2i, b: Vector2i) -> void:
-	a = nearest_walkable(a)
-	b = nearest_walkable(b)
-	var p := astar.get_id_path(a, b)
-	if not p.is_empty():
-		return
-	# carve a 2-wide corridor along the straight line
-	var steps := int(Vector2(a).distance_to(Vector2(b))) * 2
+## Carves a guaranteed ground corridor between two cells (only through rock/forest).
+func carve(a: Vector2i, b: Vector2i, width := 2.0) -> void:
+	var steps := int(Vector2(a).distance_to(Vector2(b)) * 2.0) + 1
 	for i in steps + 1:
-		var q := Vector2(a).lerp(Vector2(b), float(i) / maxf(steps, 1))
-		for off in [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1)]:
-			var c: Vector2i = Vector2i(q) + off
-			for cc in [c, mirror(c)]:
-				if in_bounds(cc) and terrain[idx(cc)] == Terrain.ROCK:
-					terrain[idx(cc)] = Terrain.GROUND
-					_refresh_solid(cc)
+		var q := Vector2(a).lerp(Vector2(b), float(i) / steps)
+		var ri := ceili(width * 0.5)
+		for x in range(int(q.x) - ri, int(q.x) + ri + 1):
+			for y in range(int(q.y) - ri, int(q.y) + ri + 1):
+				var c := Vector2i(x, y)
+				if not in_bounds(c):
+					continue
+				var edge_d := mini(mini(c.x, c.y), mini(w - 1 - c.x, h - 1 - c.y))
+				var t := terrain[idx(c)]
+				if edge_d > 0 and (t == Terrain.ROCK or t == Terrain.FOREST or t == Terrain.BUILDING):
+					set_terrain(c, Terrain.GROUND)
+
+
+## Builds pathfinding and all visuals. Call once after painting.
+func finalize() -> void:
+	for a in [astar, astar_hover]:
+		a.region = Rect2i(0, 0, w, h)
+		a.cell_size = Vector2(1, 1)
+		a.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_ONLY_IF_NO_OBSTACLES
+		a.default_compute_heuristic = AStarGrid2D.HEURISTIC_OCTILE
+		a.default_estimate_heuristic = AStarGrid2D.HEURISTIC_OCTILE
+		a.update()
+	_finalized = true
+	for x in w:
+		for y in h:
+			_refresh_solid(Vector2i(x, y))
+	_build_visuals()
 
 
 # ================================================================ pathfinding
 
 func nearest_walkable(c: Vector2i, max_r := 14) -> Vector2i:
+	return nearest_passable(c, "ground", max_r)
+
+
+func nearest_passable(c: Vector2i, mc := "ground", max_r := 14) -> Vector2i:
 	c = Vector2i(clampi(c.x, 0, w - 1), clampi(c.y, 0, h - 1))
-	if is_walkable(c):
+	if passable(c, mc):
 		return c
 	for r in range(1, max_r + 1):
 		var best := Vector2i(-1, -1)
@@ -264,7 +341,7 @@ func nearest_walkable(c: Vector2i, max_r := 14) -> Vector2i:
 				if absi(x - c.x) != r and absi(y - c.y) != r:
 					continue
 				var cc := Vector2i(x, y)
-				if not is_walkable(cc):
+				if not passable(cc, mc):
 					continue
 				var d := Vector2(cc - c).length_squared()
 				if d < best_d:
@@ -276,28 +353,32 @@ func nearest_walkable(c: Vector2i, max_r := 14) -> Vector2i:
 
 
 ## Returns an Array of Vector3 waypoints (excluding the start position).
-func find_path(from_pos: Vector3, to_cell: Vector2i) -> Array:
-	var a := nearest_walkable(world_to_cell(from_pos))
-	var b := nearest_walkable(to_cell)
+func find_path(from_pos: Vector3, to_cell: Vector2i, mc := "ground") -> Array:
+	to_cell = Vector2i(clampi(to_cell.x, 1, w - 2), clampi(to_cell.y, 1, h - 2))
+	if mc == "air" or mc == "jump":
+		return [cell_to_world(to_cell)]
+	var a := nearest_passable(world_to_cell(from_pos), mc)
+	var b := nearest_passable(to_cell, mc)
 	if a == b:
 		return [cell_to_world(b)]
-	var ids := astar.get_id_path(a, b, true)
+	var grid: AStarGrid2D = astar_hover if mc == "hover" else astar
+	var ids := grid.get_id_path(a, b, true)
 	if ids.is_empty():
 		return []
 	var pts: Array = []
 	for i in range(1, ids.size()):
 		pts.append(cell_to_world(ids[i]))
-	return _smooth(from_pos, pts)
+	return _smooth(from_pos, pts, mc)
 
 
-func _smooth(start: Vector3, pts: Array) -> Array:
+func _smooth(start: Vector3, pts: Array, mc: String) -> Array:
 	var out: Array = []
 	var cur := start
 	var i := 0
 	var n := pts.size()
 	while i < n:
 		var j := mini(i + 10, n - 1)
-		while j > i and not clear_line(cur, pts[j]):
+		while j > i and not clear_line(cur, pts[j], mc):
 			j -= 1
 		out.append(pts[j])
 		cur = pts[j]
@@ -305,21 +386,28 @@ func _smooth(start: Vector3, pts: Array) -> Array:
 	return out
 
 
-func clear_line(p0: Vector3, p1: Vector3) -> bool:
+func clear_line(p0: Vector3, p1: Vector3, mc := "ground") -> bool:
 	var dist := p0.distance_to(p1)
 	var steps := int(dist * 3.0) + 1
 	for k in steps + 1:
 		var p := p0.lerp(p1, float(k) / steps)
 		for off in [Vector3(0.3, 0, 0.3), Vector3(-0.3, 0, 0.3), Vector3(0.3, 0, -0.3), Vector3(-0.3, 0, -0.3)]:
-			if not is_walkable(world_to_cell(p + off)):
+			if not passable(world_to_cell(p + off), mc):
 				return false
 	return true
 
 
+func has_route(a: Vector2i, b: Vector2i, mc := "ground") -> bool:
+	a = nearest_passable(a, mc)
+	b = nearest_passable(b, mc)
+	var grid: AStarGrid2D = astar_hover if mc == "hover" else astar
+	return not grid.get_id_path(a, b).is_empty()
+
+
 ## Walkable cells spiralling out from centre, for spreading a group move.
-func spread_cells(center: Vector2i, count: int) -> Array:
+func spread_cells(center: Vector2i, count: int, mc := "ground") -> Array:
 	var out: Array = []
-	center = nearest_walkable(center)
+	center = nearest_passable(center, mc)
 	if count <= 0:
 		return out
 	out.append(center)
@@ -331,7 +419,7 @@ func spread_cells(center: Vector2i, count: int) -> Array:
 				if absi(x - center.x) != r and absi(y - center.y) != r:
 					continue
 				var c := Vector2i(x, y)
-				if is_walkable(c):
+				if passable(c, mc):
 					ring.append(c)
 		ring.sort_custom(func(p, q): return Vector2(p - center).length_squared() < Vector2(q - center).length_squared())
 		for c in ring:
@@ -345,6 +433,29 @@ func spread_cells(center: Vector2i, count: int) -> Array:
 
 
 # ================================================================ crystal economy
+
+func add_crystal(c: Vector2i, kind: int, amount: float) -> void:
+	if not in_bounds(c):
+		return
+	var i := idx(c)
+	crystal_kind[i] = kind
+	crystal[i] = minf(amount, _max_for(kind))
+	crystal_cells[c] = true
+	_crystal_dirty = true
+
+
+func remove_crystal(c: Vector2i) -> void:
+	if in_bounds(c) and crystal[idx(c)] > 0.0:
+		_remove_crystal(c)
+
+
+func _remove_crystal(c: Vector2i) -> void:
+	var i := idx(c)
+	crystal[i] = 0.0
+	crystal_kind[i] = Crystal.NONE
+	crystal_cells.erase(c)
+	_crystal_dirty = true
+
 
 func harvest(c: Vector2i, amount: float) -> float:
 	if not in_bounds(c):
@@ -361,20 +472,29 @@ func harvest(c: Vector2i, amount: float) -> float:
 	return take
 
 
+func harvestable(c: Vector2i) -> bool:
+	if crystal_at(c) <= 0.0:
+		return false
+	return G.blue_allowed or crystal_kind[idx(c)] != Crystal.BLUE
+
+
 func nearest_crystal(from: Vector2i, prefer_near: Vector2i = Vector2i(-1, -1)) -> Vector2i:
 	var best := Vector2i(-1, -1)
 	var best_d := INF
 	for c in crystal_cells.keys():
 		var cv: Vector2i = c
+		if not harvestable(cv):
+			continue
+		if G.mission and not G.mission.harvest_cell_ok(cv):
+			continue
 		var d: float = Vector2(cv - from).length_squared()
 		if prefer_near.x >= 0:
 			d = minf(d, Vector2(cv - prefer_near).length_squared() * 0.5)
-		# lightly prefer blue crystal
-		if crystal_kind[idx(c)] == Crystal.BLUE:
+		if crystal_kind[idx(cv)] == Crystal.BLUE:
 			d *= 0.8
 		if d < best_d:
 			best_d = d
-			best = c
+			best = cv
 	return best
 
 
@@ -383,29 +503,36 @@ func crystal_near(c: Vector2i, r: int) -> Vector2i:
 		for x in range(c.x - rr, c.x + rr + 1):
 			for y in range(c.y - rr, c.y + rr + 1):
 				var cc := Vector2i(x, y)
-				if in_bounds(cc) and crystal[idx(cc)] > 0.0:
+				if in_bounds(cc) and harvestable(cc):
 					return cc
 	return Vector2i(-1, -1)
 
 
 func _process(delta: float) -> void:
+	if not _finalized:
+		return
 	_grow_t += delta
 	_spread_t += delta
 	_blossom_t += delta
-	if _grow_t >= float(_cr.get("growth_interval", 6.0)):
+	if growth_enabled and _grow_t >= float(_cr.get("growth_interval", 6.0)):
 		_grow_t = 0.0
 		_grow()
-	if _spread_t >= float(_cr.get("spread_interval", 18.0)):
+	if spread_enabled and _spread_t >= float(_cr.get("spread_interval", 18.0)):
 		_spread_t = 0.0
 		_spread()
 	if _blossom_t >= float(_cr.get("blossom_interval", 14.0)):
 		_blossom_t = 0.0
 		_blossom_seed()
 	_redraw_t -= delta
-	if _crystal_dirty and _redraw_t <= 0.0:
-		_redraw_t = 0.5
+	if (_crystal_dirty or _water_dirty or _terrain_dirty) and _redraw_t <= 0.0:
+		_redraw_t = redraw_interval
+		if _crystal_dirty:
+			_rebuild_crystal_meshes()
+		if _water_dirty:
+			_rebuild_water()
 		_crystal_dirty = false
-		_rebuild_crystal_meshes()
+		_water_dirty = false
+		_terrain_dirty = false
 		_paint_ground()
 
 
@@ -423,8 +550,8 @@ func _grow() -> void:
 			_crystal_dirty = true
 
 
-func _can_seed(c: Vector2i) -> bool:
-	return is_walkable(c) and crystal[idx(c)] <= 0.0 and not _unit_on(c)
+func can_seed(c: Vector2i) -> bool:
+	return is_walkable(c) and crystal[idx(c)] <= 0.0 and not _unit_on(c) and (G.mission == null or G.mission.crystal_allowed(c))
 
 
 func _unit_on(c: Vector2i) -> bool:
@@ -451,8 +578,8 @@ func _spread() -> void:
 		dirs.shuffle()
 		for d in dirs:
 			var n: Vector2i = c + d
-			if _can_seed(n):
-				_add_crystal(n, crystal_kind[idx(c)], float(_cr.get("spread_seed_amount", 40)))
+			if in_bounds(n) and can_seed(n):
+				add_crystal(n, crystal_kind[idx(c)], float(_cr.get("spread_seed_amount", 40)))
 				seeded += 1
 				break
 
@@ -462,15 +589,14 @@ func _blossom_seed() -> void:
 	for b in blossoms:
 		for attempt in 6:
 			var c: Vector2i = b + Vector2i(rng.randi_range(-r, r), rng.randi_range(-r, r))
-			if _can_seed(c):
-				_add_crystal(c, Crystal.GREEN, float(_cr.get("spread_seed_amount", 40)))
+			if in_bounds(c) and can_seed(c):
+				add_crystal(c, Crystal.GREEN, float(_cr.get("spread_seed_amount", 40)))
 				break
 
 
 # ================================================================ visuals
 
 func _build_visuals() -> void:
-	# Ground: a single quad with an explicit UV mapping to the per-cell colour image.
 	ground_img = Image.create_empty(w, h, false, Image.FORMAT_RGB8)
 	_paint_ground()
 	ground_tex = ImageTexture.create_from_image(ground_img)
@@ -493,20 +619,39 @@ func _build_visuals() -> void:
 	ground.material_override = gm
 	add_child(ground)
 
-	# Out-of-bounds skirt so the map edge doesn't float in the sky.
 	var skirt := MeshInstance3D.new()
 	var pm := PlaneMesh.new()
 	pm.size = Vector2(w * 4, h * 4)
 	skirt.mesh = pm
 	skirt.position = Vector3(w * 0.5, -0.05, h * 0.5)
 	var sm := StandardMaterial3D.new()
-	sm.albedo_color = Color(0.09, 0.08, 0.07)
+	sm.albedo_color = (palette["rock"] as Color).darkened(0.5)
 	sm.roughness = 1.0
 	skirt.material_override = sm
 	add_child(skirt)
 
-	_build_rocks()
-	_build_trees()
+	rebuild_static()
+
+	var wq := QuadMesh.new()
+	wq.size = Vector2(1.0, 1.0)
+	wq.orientation = PlaneMesh.FACE_Y
+	var wmat := StandardMaterial3D.new()
+	wmat.albedo_color = Color(palette["water"].r, palette["water"].g, palette["water"].b, 0.78)
+	wmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	wmat.metallic = 0.4
+	wmat.roughness = 0.08
+	wmat.emission_enabled = true
+	wmat.emission = (palette["water"] as Color).lightened(0.2)
+	wmat.emission_energy_multiplier = 0.25
+	var wmm := MultiMesh.new()
+	wmm.transform_format = MultiMesh.TRANSFORM_3D
+	wmm.mesh = wq
+	_mm_water = MultiMeshInstance3D.new()
+	_mm_water.multimesh = wmm
+	_mm_water.material_override = wmat
+	_mm_water.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(_mm_water)
+	_rebuild_water()
 
 	var shard := CylinderMesh.new()
 	shard.top_radius = 0.0
@@ -517,6 +662,17 @@ func _build_visuals() -> void:
 	_mm_green = _make_crystal_mmi(shard, Color(0.25, 1.0, 0.35), Color(0.1, 0.5, 0.15))
 	_mm_blue = _make_crystal_mmi(shard, Color(0.3, 0.6, 1.0), Color(0.1, 0.25, 0.6))
 	_rebuild_crystal_meshes()
+
+
+## Rebuilds rocks / forest / city block meshes (call after large terrain edits).
+func rebuild_static() -> void:
+	for n in _static_nodes:
+		if is_instance_valid(n):
+			n.queue_free()
+	_static_nodes.clear()
+	_build_rocks()
+	_build_forest()
+	_build_blocks()
 
 
 func _make_crystal_mmi(mesh: Mesh, glow: Color, base: Color) -> MultiMeshInstance3D:
@@ -539,6 +695,8 @@ func _make_crystal_mmi(mesh: Mesh, glow: Color, base: Color) -> MultiMeshInstanc
 
 
 func _rebuild_crystal_meshes() -> void:
+	if _mm_green == null:
+		return
 	var green: Array = []
 	var blue: Array = []
 	for c in crystal_cells.keys():
@@ -565,6 +723,17 @@ func _rebuild_crystal_meshes() -> void:
 	_fill_mm(_mm_blue.multimesh, blue)
 
 
+func _rebuild_water() -> void:
+	if _mm_water == null:
+		return
+	var xs: Array = []
+	for x in w:
+		for y in h:
+			if terrain[y * w + x] == Terrain.WATER:
+				xs.append(Transform3D(Basis(), Vector3(x + 0.5, 0.06, y + 0.5)))
+	_fill_mm(_mm_water.multimesh, xs)
+
+
 func _fill_mm(mm: MultiMesh, xforms: Array) -> void:
 	mm.instance_count = xforms.size()
 	for i in xforms.size():
@@ -574,14 +743,30 @@ func _fill_mm(mm: MultiMesh, xforms: Array) -> void:
 func _paint_ground() -> void:
 	if ground_img == null:
 		return
+	var var_k: float = palette["variation"]
+	var base: Color = palette["ground"]
 	for x in w:
 		for y in h:
 			var i := y * w + x
-			var n := _noise.get_noise_2d(x * 1.7, y * 1.7) * 0.05
-			var col := Color(0.34 + n, 0.30 + n, 0.25 + n)
-			if terrain[i] == Terrain.ROCK:
-				col = Color(0.2 + n, 0.18 + n, 0.16 + n)
-			elif crystal[i] > 0.0:
+			var n := _noise.get_noise_2d(x * 1.7, y * 1.7) * var_k
+			var col := Color(base.r + n, base.g + n, base.b + n)
+			var c := Vector2i(x, y)
+			if tints.has(c):
+				var tc: Color = tints[c]
+				col = Color(tc.r + n * 0.5, tc.g + n * 0.5, tc.b + n * 0.5)
+			match terrain[i]:
+				Terrain.ROCK:
+					var rc: Color = palette["rock"]
+					col = Color(rc.r + n, rc.g + n, rc.b + n)
+				Terrain.WATER:
+					col = (palette["water"] as Color).darkened(0.2 + n)
+				Terrain.FOREST:
+					col = palette["forest"]
+				Terrain.BUILDING:
+					col = palette["building"]
+				Terrain.BRIDGE:
+					col = Color(0.3, 0.27, 0.24)
+			if crystal[i] > 0.0:
 				var k := clampf(crystal[i] / _max_for(crystal_kind[i]), 0.2, 1.0)
 				var tint := Color(0.16, 0.32, 0.12) if crystal_kind[i] == Crystal.GREEN else Color(0.12, 0.2, 0.38)
 				col = col.lerp(tint, 0.5 + k * 0.4)
@@ -590,65 +775,84 @@ func _paint_ground() -> void:
 		ground_tex.update(ground_img)
 
 
+func _cells_of(t: int) -> Array:
+	var cells: Array = []
+	for x in w:
+		for y in h:
+			if terrain[y * w + x] == t:
+				cells.append(Vector2i(x, y))
+	return cells
+
+
+func _add_mm(mesh: Mesh, xforms: Array, col: Color, rough := 1.0, emissive := 0.0) -> void:
+	if xforms.is_empty():
+		return
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = mesh
+	_fill_mm(mm, xforms)
+	var mmi := MultiMeshInstance3D.new()
+	mmi.multimesh = mm
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = col
+	mat.roughness = rough
+	if emissive > 0.0:
+		mat.emission_enabled = true
+		mat.emission = col
+		mat.emission_energy_multiplier = emissive
+	mmi.material_override = mat
+	add_child(mmi)
+	_static_nodes.append(mmi)
+
+
 func _build_rocks() -> void:
 	var rock_mesh := SphereMesh.new()
 	rock_mesh.radius = 0.5
 	rock_mesh.height = 1.0
 	rock_mesh.radial_segments = 7
 	rock_mesh.rings = 4
-	var cells: Array = []
-	for x in w:
-		for y in h:
-			if terrain[y * w + x] == Terrain.ROCK:
-				cells.append(Vector2i(x, y))
-	var mm := MultiMesh.new()
-	mm.transform_format = MultiMesh.TRANSFORM_3D
-	mm.mesh = rock_mesh
-	mm.instance_count = cells.size()
-	for i in cells.size():
-		var c: Vector2i = cells[i]
+	var xs: Array = []
+	for c in _cells_of(Terrain.ROCK):
 		var hk := hash(c)
 		var sx := 1.1 + float(hk % 5) * 0.08
 		var sy := 0.7 + float((hk / 5) % 9) * 0.12
 		var b := Basis(Vector3.UP, float(hk % 628) / 100.0).scaled(Vector3(sx, sy, sx))
-		mm.set_instance_transform(i, Transform3D(b, Vector3(c.x + 0.5, sy * 0.25, c.y + 0.5)))
-	var mmi := MultiMeshInstance3D.new()
-	mmi.multimesh = mm
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.26, 0.23, 0.21)
-	mat.roughness = 1.0
-	mmi.material_override = mat
-	add_child(mmi)
+		xs.append(Transform3D(b, Vector3(c.x + 0.5, sy * 0.25, c.y + 0.5)))
+	_add_mm(rock_mesh, xs, palette["rock"])
 
 
-func _build_trees() -> void:
-	for b in blossoms:
-		var root := Node3D.new()
-		root.position = cell_to_world(b)
-		add_child(root)
-		var trunk := MeshInstance3D.new()
-		var tm := CylinderMesh.new()
-		tm.top_radius = 0.12
-		tm.bottom_radius = 0.3
-		tm.height = 1.6
-		trunk.mesh = tm
-		trunk.position.y = 0.8
-		var bark := StandardMaterial3D.new()
-		bark.albedo_color = Color(0.2, 0.25, 0.15)
-		trunk.material_override = bark
-		root.add_child(trunk)
-		var pod_mat := StandardMaterial3D.new()
-		pod_mat.albedo_color = Color(0.2, 0.6, 0.2)
-		pod_mat.emission_enabled = true
-		pod_mat.emission = Color(0.3, 1.0, 0.3)
-		pod_mat.emission_energy_multiplier = 1.2
-		for k in 5:
-			var pod := MeshInstance3D.new()
-			var sm := SphereMesh.new()
-			sm.radius = 0.28
-			sm.height = 0.5
-			pod.mesh = sm
-			var a: float = TAU * k / 5.0
-			pod.position = Vector3(cos(a) * 0.35, 1.5 + 0.15 * (k % 2), sin(a) * 0.35)
-			pod.material_override = pod_mat
-			root.add_child(pod)
+func _build_forest() -> void:
+	var cone := CylinderMesh.new()
+	cone.top_radius = 0.0
+	cone.bottom_radius = 0.5
+	cone.height = 1.6
+	cone.radial_segments = 6
+	cone.rings = 1
+	var trunk := CylinderMesh.new()
+	trunk.top_radius = 0.07
+	trunk.bottom_radius = 0.1
+	trunk.height = 0.6
+	trunk.radial_segments = 5
+	trunk.rings = 1
+	var tops: Array = []
+	var trunks: Array = []
+	for c in _cells_of(Terrain.FOREST):
+		var hk := hash(c)
+		var s := 0.8 + float(hk % 7) * 0.08
+		var ox := float(hk % 100) / 100.0 * 0.3 - 0.15
+		var oz := float((hk / 100) % 100) / 100.0 * 0.3 - 0.15
+		tops.append(Transform3D(Basis().scaled(Vector3(s, s, s)), Vector3(c.x + 0.5 + ox, 0.55 + 0.8 * s, c.y + 0.5 + oz)))
+		trunks.append(Transform3D(Basis(), Vector3(c.x + 0.5 + ox, 0.3, c.y + 0.5 + oz)))
+	_add_mm(cone, tops, palette["tree"])
+	_add_mm(trunk, trunks, Color(0.22, 0.17, 0.12))
+
+
+func _build_blocks() -> void:
+	var bm := BoxMesh.new()
+	bm.size = Vector3(1, 1, 1)
+	var xs: Array = []
+	for c in _cells_of(Terrain.BUILDING):
+		var hk := hash(Vector2i(c.x / 2, c.y / 2))
+		var hgt := 0.8 + float(hk % 9) * 0.35
+		xs.append(Transform3D(Basis().scaled(Vector3(0.98, hgt, 0.98)), Vector3(c.x + 0.5, hgt * 0.5, c.y + 0.5)))
+	_add_mm(bm, xs, palette["block"], 0.85)

@@ -9,6 +9,7 @@ var damage := 10.0
 var warhead := "bullet"
 var kind := "tracer"
 var shooter: Entity = null
+var weapon_splash := 0.0
 var _life := 4.0
 
 
@@ -21,6 +22,7 @@ func launch(from: Vector3, t: Entity, w: Dictionary, dmg: float, src: Entity) ->
 	warhead = w.get("warhead", "bullet")
 	kind = w.get("projectile", "tracer")
 	shooter = src
+	weapon_splash = float(w.get("splash", 0.0))
 	var mi := MeshInstance3D.new()
 	var m := StandardMaterial3D.new()
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -33,6 +35,19 @@ func launch(from: Vector3, t: Entity, w: Dictionary, dmg: float, src: Entity) ->
 			mi.mesh = cm
 			mi.rotation.x = PI / 2.0
 			m.albedo_color = Color(2.5, 1.2, 0.4)
+		"sonic":
+			var tm := TorusMesh.new()
+			tm.inner_radius = 0.1
+			tm.outer_radius = 0.16
+			mi.mesh = tm
+			mi.rotation.x = PI / 2.0
+			m.albedo_color = Color(0.6, 1.4, 2.5)
+		"flame":
+			var fm := SphereMesh.new()
+			fm.radius = 0.12
+			fm.height = 0.24
+			mi.mesh = fm
+			m.albedo_color = Color(3.0, 1.2, 0.2)
 		"shell":
 			var sm := SphereMesh.new()
 			sm.radius = 0.06
@@ -68,8 +83,14 @@ func _physics_process(delta: float) -> void:
 
 
 func _impact() -> void:
-	if is_instance_valid(target) and target.alive:
-		var src: Entity = shooter if is_instance_valid(shooter) else null
+	var src: Entity = shooter if is_instance_valid(shooter) else null
+	var splash := float(weapon_splash)
+	if splash > 0.0:
+		var spare := src.team if src else -1
+		G.damage_area(target_pos, splash, damage, warhead, src, spare, is_instance_valid(target) and target.is_air)
+	elif is_instance_valid(target) and target.alive:
 		target.take_damage(damage, warhead, src)
 	Fx.impact(target_pos, kind)
+	if G.mission:
+		G.mission.on_impact(target_pos, warhead, src)
 	queue_free()

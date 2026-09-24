@@ -1,10 +1,21 @@
 class_name AIController
 extends Node
-## Skirmish AI (prototype): follows a build order, keeps power positive,
-## replaces harvesters, trains a mixed army, defends its base and attacks in
-## growing waves. Plays by the same economy rules as the human.
+## Mission AI: follows a build order, keeps power positive, replaces
+## harvesters, trains a mixed army, defends its base and attacks in growing
+## waves. Plays by the same economy rules as the human. Options (setup opts):
+##   build: bool            build and rebuild structures (default true)
+##   produce: bool          train units (default true)
+##   build_order: Array     structure ids
+##   units: Array           unit ids to train (default: everything buildable)
+##   first_attack: float    seconds before the first wave
+##   wave_interval: float   seconds between waves
+##   wave_size / wave_max   units in the first wave / cap
+##   income: float          free credits per second (mission difficulty)
+##   defend_radius: float   react to enemies this close to the base
+##   target: Vector2i       fixed attack goal (otherwise nearest enemy structure)
+## Units tagged "scripted" are left alone.
 
-const BUILD_ORDER := ["power_plant", "refinery", "barracks", "power_plant", "war_factory",
+const DEFAULT_ORDER := ["power_plant", "refinery", "barracks", "power_plant", "war_factory",
 	"guard_tower", "power_plant", "refinery", "guard_tower", "power_plant", "barracks", "guard_tower"]
 const CORE := ["power_plant", "refinery", "barracks", "war_factory"]
 
@@ -12,30 +23,54 @@ var p: PlayerState
 var base_center := Vector3.ZERO
 var enemy_dir := Vector3.FORWARD
 var wave_size := 5
+var wave_max := 16
+var wave_interval := 45.0
+var build := true
+var produce := true
+var build_order: Array = DEFAULT_ORDER
+var unit_pool: Array = []
+var income := 0.0
+var defend_radius := 16.0
+var fixed_target := Vector2i(-9999, -9999)
+var enabled := true
 var order_i := 0
 var _think_t := 2.0
-var _attack_cooldown := 90.0     # first wave no earlier than this (seconds)
+var _attack_cooldown := 90.0
 var rng := RandomNumberGenerator.new()
 
 
-func setup(player: PlayerState, base_cell: Vector2i, enemy_cell: Vector2i) -> void:
+func setup(player: PlayerState, base_cell: Vector2i, enemy_cell: Vector2i, opts := {}) -> void:
 	p = player
 	base_center = G.map.cell_to_world(base_cell)
 	enemy_dir = (G.map.cell_to_world(enemy_cell) - base_center).normalized()
+	build = opts.get("build", true)
+	produce = opts.get("produce", true)
+	build_order = opts.get("build_order", DEFAULT_ORDER)
+	unit_pool = opts.get("units", [])
+	_attack_cooldown = float(opts.get("first_attack", 90.0))
+	wave_interval = float(opts.get("wave_interval", 45.0))
+	wave_size = int(opts.get("wave_size", 5))
+	wave_max = int(opts.get("wave_max", 16))
+	income = float(opts.get("income", 0.0))
+	defend_radius = float(opts.get("defend_radius", 16.0))
+	fixed_target = opts.get("target", Vector2i(-9999, -9999))
 	rng.randomize()
 
 
 func _physics_process(delta: float) -> void:
-	if p == null or p.defeated or G.game_over:
+	if p == null or p.defeated or G.game_over or not enabled:
 		return
+	p.credits += income * delta
 	_attack_cooldown -= delta
 	_think_t -= delta
 	if _think_t > 0.0:
 		return
 	_think_t = 1.0
-	_place_ready()
-	_plan_structures()
-	_plan_units()
+	if build:
+		_place_ready()
+		_plan_structures()
+	if produce:
+		_plan_units()
 	_command_army()
 
 
@@ -56,26 +91,32 @@ func _place_ready() -> void:
 func _plan_structures() -> void:
 	if not p.queues["structure"].is_empty() or p.ready_structure["structure"] != "":
 		return
+	if p.count_of("construction_yard") == 0:
+		return
 	var want := ""
 	var surplus := p.power_produced - p.power_used
 	if surplus < 20 and p.can_build("power_plant"):
 		want = "power_plant"
 	else:
-		# rebuild lost core structures first
 		for c in CORE:
-			if p.count_of(c) == 0 and p.can_build(c) and order_i > BUILD_ORDER.find(c):
+			if p.count_of(c) == 0 and p.can_build(c) and order_i > build_order.find(c) and build_order.has(c):
 				want = c
 				break
-	if want == "" and order_i < BUILD_ORDER.size():
-		var next: String = BUILD_ORDER[order_i]
+	if want == "" and order_i < build_order.size():
+		var next: String = build_order[order_i]
 		var cat: String = G.def_of(next).get("category", "structure")
 		if cat == "defense":
 			if p.queues["defense"].is_empty() and p.ready_structure["defense"] == "" and p.queue_item(next):
 				order_i += 1
+			elif not p.can_build(next):
+				order_i += 1
 			return
 		want = next
+		if not p.can_build(next) and p.missing_prereqs(next).is_empty():
+			order_i += 1
+			return
 	if want != "" and p.queue_item(want):
-		if order_i < BUILD_ORDER.size() and BUILD_ORDER[order_i] == want:
+		if order_i < build_order.size() and build_order[order_i] == want:
 			order_i += 1
 
 
@@ -113,21 +154,31 @@ func _keeps_gap(top_left: Vector2i, size: Vector2i) -> bool:
 
 # ---------------------------------------------------------------- production
 
+func _pool(cat: String) -> Array:
+	var opts: Array = []
+	var src: Array = unit_pool if not unit_pool.is_empty() else G.buildables(cat, p.faction)
+	for id in src:
+		if id == "harvester" or G.def_of(id).get("category", "") != cat:
+			continue
+		if p.can_build(id):
+			opts.append(id)
+	return opts
+
+
 func _plan_units() -> void:
 	var harvesters := p.count_of("harvester")
 	var refineries := p.count_of("refinery")
 	if harvesters < refineries and p.can_build("harvester") and p.queue_count("harvester") == 0:
 		p.queue_item("harvester")
 		return
-	if p.credits > 250 and p.queues["infantry"].size() < 2 and p.can_build("rifleman"):
-		p.queue_item("rocket_trooper" if rng.randf() < 0.4 else "rifleman")
+	if p.credits > 250 and p.queues["infantry"].size() < 2:
+		var inf := _pool("infantry")
+		if not inf.is_empty():
+			p.queue_item(inf[rng.randi() % inf.size()])
 	if p.credits > 700 and p.queues["vehicle"].size() < 2:
-		var opts: Array = []
-		for id in G.buildables("vehicle", p.faction):
-			if id != "harvester" and p.can_build(id):
-				opts.append(id)
-		if not opts.is_empty():
-			p.queue_item(opts[rng.randi() % opts.size()])
+		var veh := _pool("vehicle")
+		if not veh.is_empty():
+			p.queue_item(veh[rng.randi() % veh.size()])
 
 
 # ---------------------------------------------------------------- army
@@ -135,18 +186,17 @@ func _plan_units() -> void:
 func _army() -> Array:
 	var out: Array = []
 	for u in p.units():
-		if not (u is Harvester):
+		if not (u is Harvester) and not u.tags.has("scripted") and not u.weapon.is_empty():
 			out.append(u)
 	return out
 
 
 func _command_army() -> void:
 	var army := _army()
-	# defend: any enemy close to the base?
 	var threat: Entity = null
-	var best := 16.0
+	var best := defend_radius
 	for e in G.entities:
-		if e.team != p.id and e.alive and e is Unit:
+		if e.alive and e is Unit and G.is_enemy(p.id, e.team) and e.visible_to(p.id):
 			var d: float = e.position.distance_to(base_center)
 			if d < best:
 				best = d
@@ -154,11 +204,10 @@ func _command_army() -> void:
 	if threat:
 		var tc: Vector2i = G.map.world_to_cell(threat.position)
 		for u in army:
-			if u.order == Unit.Order.IDLE or (u.order == Unit.Order.ATTACK_MOVE and u.position.distance_to(base_center) < 20.0):
+			if u.order == Unit.Order.IDLE or (u.order == Unit.Order.ATTACK_MOVE and u.position.distance_to(base_center) < defend_radius + 4.0):
 				u.cmd_attack_move(tc)
 		return
 	var idle: Array = army.filter(func(u): return u.order == Unit.Order.IDLE)
-	# units that finished an attack in the field keep pushing to the next target
 	var forward: Array = idle.filter(func(u): return u.position.distance_to(base_center) > 22.0)
 	if not forward.is_empty():
 		var next_goal := _attack_goal()
@@ -173,10 +222,9 @@ func _command_army() -> void:
 			var cells: Array = G.map.spread_cells(goal, idle.size())
 			for i in idle.size():
 				idle[i].cmd_attack_move(cells[i])
-			wave_size = mini(wave_size + 2, 16)
-			_attack_cooldown = 45.0
+			wave_size = mini(wave_size + 2, wave_max)
+			_attack_cooldown = wave_interval
 	elif not idle.is_empty():
-		# gather idle units at a rally point in front of the base
 		var rally: Vector2i = G.map.world_to_cell(base_center + enemy_dir * 9.0)
 		for u in idle:
 			if u.position.distance_to(G.map.cell_to_world(rally)) > 5.0 and not u.has_path():
@@ -184,12 +232,13 @@ func _command_army() -> void:
 
 
 func _attack_goal() -> Vector2i:
+	if fixed_target.x > -999:
+		return fixed_target
 	var best: Entity = null
 	var best_d := INF
 	for e in G.entities:
-		if e.team != p.id and e.alive:
+		if e.alive and G.is_enemy(p.id, e.team) and e.visible_to(p.id) and not e.def.get("decor", false):
 			var d: float = e.position.distance_to(base_center)
-			# prefer structures (the win condition), then anything
 			if e is Structure:
 				d *= 0.7
 			if d < best_d:

@@ -24,9 +24,15 @@ func _draw() -> void:
 	var cam: Camera3D = G.camera.cam
 	var vp := get_viewport_rect()
 	for e in G.entities:
-		if not e.alive:
+		if not e.alive or not e.visible_to(G.local_team) or e.def.get("decor", false):
 			continue
-		var want_bar: bool = e.selected or e.hp < e.max_hp - 0.5 or (e is Structure and e.repairing)
+		if e.hidden_underground():
+			if e.team == G.local_team:
+				var up: Vector3 = e.position + Vector3(0, 0.3, 0)
+				if not cam.is_position_behind(up):
+					draw_circle(cam.unproject_position(up), 4.0, Color(0.8, 0.6, 0.3, 0.8))
+			continue
+		var want_bar: bool = e.selected or e.hp < e.max_hp - 0.5 or (e is Structure and e.repairing) or e.hijack > 0.01 or e.def.get("hero", false)
 		if not want_bar:
 			continue
 		var wp: Vector3 = e.position + Vector3(0, e.bar_height + 0.15, 0)
@@ -74,6 +80,12 @@ func _draw_bars(e, sp: Vector2) -> void:
 		var cx: float = r.end.x + 5.0 + i * 7.0
 		var cy: float = r.position.y + 2.0
 		draw_colored_polygon(PackedVector2Array([Vector2(cx - 3, cy - 2), Vector2(cx, cy + 2), Vector2(cx + 3, cy - 2)]), Color(1.0, 0.8, 0.2))
+	# SIBYL hijack meter
+	if e.hijack > 0.01:
+		var r3 := Rect2(r.position.x, r.position.y - 6, w * e.hijack, 3)
+		draw_rect(r3, Color(0.5, 1.0, 0.6) if int(G.elapsed * 6.0) % 2 == 0 else Color(1.0, 0.3, 0.9), true)
+	if e.def.get("hero", false):
+		draw_string(get_theme_default_font(), Vector2(sp.x - 40, sp.y - 8), e.display_name(), HORIZONTAL_ALIGNMENT_CENTER, 80, 11, Color(1, 0.9, 0.5))
 	# repair wrench blink
 	if e is Structure and e.repairing and int(G.elapsed * 3.0) % 2 == 0:
 		draw_string(get_theme_default_font(), Vector2(sp.x - 5, sp.y - 6), "+", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, GREEN)

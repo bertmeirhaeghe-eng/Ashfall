@@ -1,18 +1,25 @@
 ; Engine configuration file.
-; Ashfall - Milestone 1 prototype (harvest, build, fight, one map)
+; Ashfall - Bastion Coalition campaign (10 missions)
 
 config_version=5
 
 [application]
 
-config/name="Ashfall (M1 Prototype)"
-config/description="Tiberian Sun-inspired RTS prototype: harvest, build, fight."
-run/main_scene="res://scenes/main.tscn"
+config/name="Ashfall"
+config/description="Tiberian Sun-inspired RTS: the Ashfall campaign."
+run/main_scene="res://scenes/menu.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
+
+[audio]
+
+general/text_to_speech=true
 
 [autoload]
 
 G="*res://scripts/g.gd"
+Voice="*res://scripts/voice.gd"
+Campaign="*res://scripts/campaign.gd"
+TestRunner="*res://scripts/dev/test_runner.gd"
 
 [display]
 

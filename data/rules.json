@@ -1,5 +1,5 @@
 {
-  "_comment": "Ashfall rules file. All balance lives here (INI-style rules, per design doc Part 7). Times in seconds, distances in cells, speed in cells/second.",
+  "_comment": "Ashfall rules file. All balance lives here. Times in seconds, distances in cells, speed in cells/second. Unit flags: move (ground|hover|air|jump), networked (SIBYL can hijack), detector (reveal radius), cloak, burrow, transport (seats), engineer, heal (hp/s to infantry), deploys (structure id), hero, outcast (heals on crystal), civilian, limit, voice (reaction set). Weapon 'targets' is ground|air|both.",
 
   "game": {
     "start_credits": 4000,
@@ -32,17 +32,43 @@
   "warheads": {
     "bullet": {"infantry": 1.0,  "light": 0.6, "heavy": 0.25, "structure": 0.2},
     "rocket": {"infantry": 0.3,  "light": 1.0, "heavy": 1.0,  "structure": 0.7},
-    "cannon": {"infantry": 0.45, "light": 0.9, "heavy": 1.0,  "structure": 0.6}
+    "cannon": {"infantry": 0.45, "light": 0.9, "heavy": 1.0,  "structure": 0.6},
+    "flame":  {"infantry": 1.3,  "light": 0.7, "heavy": 0.35, "structure": 0.9},
+    "sonic":  {"infantry": 0.9,  "light": 0.9, "heavy": 0.9,  "structure": 1.2},
+    "laser":  {"infantry": 1.0,  "light": 1.0, "heavy": 0.9,  "structure": 0.8},
+    "claw":   {"infantry": 1.0,  "light": 0.8, "heavy": 0.6,  "structure": 0.5},
+    "spore":  {"infantry": 1.2,  "light": 0.5, "heavy": 0.3,  "structure": 0.2},
+    "flak":   {"infantry": 0.4,  "light": 1.0, "heavy": 0.7,  "structure": 0.1}
   },
 
   "weapons": {
-    "rifle":         {"damage": 12, "range": 4.5, "cooldown": 0.8, "warhead": "bullet", "projectile": "tracer", "speed": 40},
-    "rocket_pod":    {"damage": 40, "range": 6.0, "cooldown": 2.2, "warhead": "rocket", "projectile": "rocket", "speed": 13},
-    "twin_mg":       {"damage": 14, "range": 5.0, "cooldown": 0.4, "warhead": "bullet", "projectile": "tracer", "speed": 40},
-    "cannon_120":    {"damage": 60, "range": 6.5, "cooldown": 2.0, "warhead": "cannon", "projectile": "shell",  "speed": 24},
-    "cannon_75":     {"damage": 34, "range": 5.5, "cooldown": 1.2, "warhead": "cannon", "projectile": "shell",  "speed": 26},
-    "buggy_mg":      {"damage": 11, "range": 4.5, "cooldown": 0.3, "warhead": "bullet", "projectile": "tracer", "speed": 40},
-    "tower_cannon":  {"damage": 38, "range": 7.5, "cooldown": 1.1, "warhead": "cannon", "projectile": "shell",  "speed": 28}
+    "rifle":           {"damage": 12, "range": 4.5, "cooldown": 0.8, "warhead": "bullet", "projectile": "tracer", "speed": 40, "targets": "ground"},
+    "rocket_pod":      {"damage": 40, "range": 6.0, "cooldown": 2.2, "warhead": "rocket", "projectile": "rocket", "speed": 13, "targets": "both"},
+    "twin_mg":         {"damage": 14, "range": 5.0, "cooldown": 0.4, "warhead": "bullet", "projectile": "tracer", "speed": 40, "targets": "both"},
+    "cannon_120":      {"damage": 60, "range": 6.5, "cooldown": 2.0, "warhead": "cannon", "projectile": "shell",  "speed": 24, "targets": "ground"},
+    "cannon_75":       {"damage": 34, "range": 5.5, "cooldown": 1.2, "warhead": "cannon", "projectile": "shell",  "speed": 26, "targets": "ground"},
+    "buggy_mg":        {"damage": 11, "range": 4.5, "cooldown": 0.3, "warhead": "bullet", "projectile": "tracer", "speed": 40, "targets": "ground"},
+    "tower_cannon":    {"damage": 38, "range": 7.5, "cooldown": 1.1, "warhead": "cannon", "projectile": "shell",  "speed": 28, "targets": "ground"},
+    "jump_rifle":      {"damage": 16, "range": 5.0, "cooldown": 0.7, "warhead": "bullet", "projectile": "tracer", "speed": 40, "targets": "both"},
+    "tempest_rockets": {"damage": 42, "range": 7.0, "cooldown": 2.4, "warhead": "rocket", "projectile": "rocket", "speed": 15, "targets": "both", "splash": 0.8},
+    "kite_missiles":   {"damage": 55, "range": 5.5, "cooldown": 1.6, "warhead": "rocket", "projectile": "rocket", "speed": 18, "targets": "ground"},
+    "apc_mg":          {"damage": 12, "range": 4.5, "cooldown": 0.35, "warhead": "bullet", "projectile": "tracer", "speed": 40, "targets": "both"},
+    "sonic":           {"damage": 70, "range": 6.0, "cooldown": 2.4, "warhead": "sonic",  "projectile": "sonic",  "speed": 18, "targets": "ground", "splash": 1.2},
+    "sonic_long":      {"damage": 70, "range": 12.0, "cooldown": 2.4, "warhead": "sonic", "projectile": "sonic",  "speed": 20, "targets": "ground", "splash": 1.2},
+    "bulwark_cannon":  {"damage": 140, "range": 7.5, "cooldown": 2.4, "warhead": "cannon", "projectile": "shell", "speed": 24, "targets": "ground", "splash": 1.0},
+    "flak":            {"damage": 32, "range": 7.5, "cooldown": 0.5, "warhead": "flak",   "projectile": "tracer", "speed": 45, "targets": "air"},
+    "flamer":          {"damage": 30, "range": 3.0, "cooldown": 0.6, "warhead": "flame",  "projectile": "flame",  "speed": 14, "targets": "ground", "splash": 0.6},
+    "cyborg_gun":      {"damage": 18, "range": 5.0, "cooldown": 0.6, "warhead": "bullet", "projectile": "tracer", "speed": 40, "targets": "both"},
+    "laser":           {"damage": 120, "range": 8.0, "cooldown": 2.8, "warhead": "laser", "projectile": "laser",  "speed": 0,  "targets": "ground"},
+    "artillery":       {"damage": 90, "range": 13.0, "cooldown": 5.0, "warhead": "cannon", "projectile": "shell", "speed": 14, "targets": "ground", "splash": 1.5, "min_range": 3.0},
+    "claws":           {"damage": 25, "range": 1.2, "cooldown": 0.8, "warhead": "claw",   "projectile": "none",   "speed": 0,  "targets": "ground"},
+    "spore_spit":      {"damage": 20, "range": 4.0, "cooldown": 1.2, "warhead": "spore",  "projectile": "flame",  "speed": 10, "targets": "both"},
+    "brute_club":      {"damage": 45, "range": 1.4, "cooldown": 1.1, "warhead": "claw",   "projectile": "none",   "speed": 0,  "targets": "ground"},
+    "outcast_rifle":   {"damage": 14, "range": 4.5, "cooldown": 0.8, "warhead": "bullet", "projectile": "tracer", "speed": 40, "targets": "ground"},
+    "kestrel_rifle":   {"damage": 35, "range": 6.0, "cooldown": 0.7, "warhead": "bullet", "projectile": "tracer", "speed": 45, "targets": "both"},
+    "tallow_rifle":    {"damage": 30, "range": 5.5, "cooldown": 0.8, "warhead": "bullet", "projectile": "tracer", "speed": 45, "targets": "ground"},
+    "choir_beam":      {"damage": 90, "range": 7.0, "cooldown": 1.6, "warhead": "laser",  "projectile": "laser",  "speed": 0,  "targets": "both", "splash": 1.0},
+    "guardian_beam":   {"damage": 70, "range": 8.0, "cooldown": 1.8, "warhead": "laser",  "projectile": "laser",  "speed": 0,  "targets": "both"}
   },
 
   "units": {
@@ -50,44 +76,222 @@
       "name": "Rifleman", "category": "infantry", "faction": "any",
       "cost": 100, "build_time": 3, "hp": 100, "armor": "infantry",
       "speed": 1.8, "radius": 0.18, "weapon": "rifle", "model": "rifleman", "height": 0.8,
-      "prereq": ["barracks"]
+      "prereq": ["barracks"], "voice": "infantry"
     },
     "rocket_trooper": {
       "name": "Rocket Trooper", "category": "infantry", "faction": "any",
       "cost": 250, "build_time": 5, "hp": 90, "armor": "infantry",
       "speed": 1.6, "radius": 0.18, "weapon": "rocket_pod", "model": "rocket_trooper", "height": 0.8,
-      "prereq": ["barracks"]
+      "prereq": ["barracks"], "voice": "infantry"
+    },
+    "engineer": {
+      "name": "Engineer", "category": "infantry", "faction": "bastion",
+      "cost": 500, "build_time": 6, "hp": 75, "armor": "infantry",
+      "speed": 1.7, "radius": 0.18, "model": "engineer", "height": 0.8, "engineer": true,
+      "prereq": ["barracks"], "voice": "engineer"
+    },
+    "medic": {
+      "name": "Medic", "category": "infantry", "faction": "bastion",
+      "cost": 350, "build_time": 5, "hp": 90, "armor": "infantry",
+      "speed": 1.8, "radius": 0.18, "model": "medic", "height": 0.8, "heal": 16,
+      "prereq": ["barracks"], "voice": "medic"
+    },
+    "skyjumper": {
+      "name": "Skyjumper", "category": "infantry", "faction": "bastion",
+      "cost": 600, "build_time": 7, "hp": 120, "armor": "infantry", "move": "jump",
+      "speed": 3.0, "radius": 0.2, "weapon": "jump_rifle", "model": "skyjumper", "height": 0.8,
+      "prereq": ["barracks", "radar"], "voice": "skyjumper"
     },
     "harvester": {
       "name": "Harvester", "category": "vehicle", "faction": "any",
       "cost": 800, "build_time": 10, "hp": 900, "armor": "heavy",
       "speed": 1.6, "radius": 0.6, "model": "harvester", "height": 1.1,
       "capacity": 500, "harvest_rate": 100, "unload_rate": 250,
-      "prereq": ["war_factory", "refinery"]
+      "prereq": ["war_factory", "refinery"], "voice": "harvester"
+    },
+    "mcv": {
+      "name": "MCV", "category": "vehicle", "faction": "bastion",
+      "cost": 3000, "build_time": 25, "hp": 1400, "armor": "heavy",
+      "speed": 1.3, "radius": 0.7, "model": "mcv", "height": 1.3, "deploys": "construction_yard",
+      "prereq": ["war_factory", "service_depot"], "voice": "mcv"
     },
     "scout_mech": {
       "name": "Pathfinder Mech", "category": "vehicle", "faction": "bastion",
       "cost": 500, "build_time": 6, "hp": 230, "armor": "light",
       "speed": 3.2, "radius": 0.4, "weapon": "twin_mg", "model": "scout_mech", "height": 1.1,
-      "prereq": ["war_factory"]
+      "prereq": ["war_factory"], "networked": true, "voice": "pathfinder"
     },
     "warden": {
       "name": "Warden Walker", "category": "vehicle", "faction": "bastion",
       "cost": 850, "build_time": 10, "hp": 480, "armor": "heavy",
       "speed": 1.9, "radius": 0.5, "weapon": "cannon_120", "model": "walker", "height": 1.4,
-      "prereq": ["war_factory"]
+      "prereq": ["war_factory"], "networked": true, "voice": "walker"
     },
+    "mobile_sensor": {
+      "name": "Mobile Sensor Array", "category": "vehicle", "faction": "bastion",
+      "cost": 900, "build_time": 9, "hp": 300, "armor": "light",
+      "speed": 2.2, "radius": 0.45, "model": "sensor_truck", "height": 1.3, "detector": 7,
+      "prereq": ["war_factory", "radar"], "voice": "sensor"
+    },
+    "tempest": {
+      "name": "Tempest Hover", "category": "vehicle", "faction": "bastion", "move": "hover",
+      "cost": 900, "build_time": 9, "hp": 260, "armor": "light",
+      "speed": 3.4, "radius": 0.45, "weapon": "tempest_rockets", "model": "hover", "height": 0.9,
+      "prereq": ["war_factory"], "networked": true, "voice": "hover"
+    },
+    "apc": {
+      "name": "Amphibious APC", "category": "vehicle", "faction": "bastion", "move": "hover",
+      "cost": 800, "build_time": 8, "hp": 420, "armor": "heavy", "transport": 5,
+      "speed": 3.0, "radius": 0.5, "weapon": "apc_mg", "model": "apc", "height": 1.0,
+      "prereq": ["war_factory"], "voice": "apc"
+    },
+    "resonator": {
+      "name": "Resonator", "category": "vehicle", "faction": "bastion",
+      "cost": 1300, "build_time": 12, "hp": 420, "armor": "heavy",
+      "speed": 2.0, "radius": 0.5, "weapon": "sonic", "model": "resonator", "height": 1.2,
+      "prereq": ["war_factory", "tech_center"], "networked": true, "voice": "resonator"
+    },
+    "resonator_x": {
+      "name": "Experimental Resonator", "category": "vehicle", "faction": "bastion", "buildable": false,
+      "cost": 2000, "build_time": 12, "hp": 520, "armor": "heavy",
+      "speed": 2.0, "radius": 0.55, "weapon": "sonic_long", "model": "resonator", "height": 1.3,
+      "prereq": [], "networked": true, "voice": "resonator"
+    },
+    "bulwark": {
+      "name": "Bulwark", "category": "vehicle", "faction": "bastion", "limit": 1,
+      "cost": 3500, "build_time": 30, "hp": 3000, "armor": "heavy",
+      "speed": 1.2, "radius": 0.9, "weapon": "bulwark_cannon", "model": "bulwark", "height": 2.4,
+      "prereq": ["war_factory", "tech_center"], "networked": true, "voice": "bulwark"
+    },
+    "kite": {
+      "name": "Kite VTOL", "category": "aircraft", "faction": "bastion", "move": "air",
+      "cost": 1100, "build_time": 10, "hp": 260, "armor": "light",
+      "speed": 5.0, "radius": 0.5, "weapon": "kite_missiles", "model": "kite", "height": 0.6,
+      "prereq": ["helipad"], "networked": true, "voice": "kite"
+    },
+
     "raider": {
       "name": "Raider Buggy", "category": "vehicle", "faction": "veil",
       "cost": 400, "build_time": 5, "hp": 170, "armor": "light",
       "speed": 4.2, "radius": 0.42, "weapon": "buggy_mg", "model": "buggy", "height": 0.9,
-      "prereq": ["war_factory"]
+      "prereq": ["war_factory"], "voice": "veil_vehicle"
     },
     "scorpion": {
       "name": "Scorpion Tank", "category": "vehicle", "faction": "veil",
       "cost": 650, "build_time": 8, "hp": 330, "armor": "light",
       "speed": 3.0, "radius": 0.48, "weapon": "cannon_75", "model": "tank", "height": 1.0,
-      "prereq": ["war_factory"]
+      "prereq": ["war_factory"], "voice": "veil_vehicle"
+    },
+    "shade_tank": {
+      "name": "Shade Tank", "category": "vehicle", "faction": "veil", "cloak": true,
+      "cost": 900, "build_time": 10, "hp": 300, "armor": "light",
+      "speed": 3.0, "radius": 0.48, "weapon": "cannon_75", "model": "shade_tank", "height": 1.0,
+      "prereq": ["war_factory"], "voice": "shade"
+    },
+    "cinder_drill": {
+      "name": "Cinder Drill", "category": "vehicle", "faction": "veil", "burrow": true,
+      "cost": 1000, "build_time": 10, "hp": 380, "armor": "heavy",
+      "speed": 2.6, "radius": 0.5, "weapon": "flamer", "model": "drill", "height": 0.9,
+      "prereq": ["war_factory"], "voice": "drill"
+    },
+    "mole_apc": {
+      "name": "Mole APC", "category": "vehicle", "faction": "veil", "burrow": true, "transport": 5,
+      "cost": 800, "build_time": 8, "hp": 400, "armor": "heavy", "shelter": 3.0,
+      "speed": 2.8, "radius": 0.5, "model": "mole", "height": 0.9,
+      "prereq": ["war_factory"], "voice": "mole"
+    },
+    "cyborg": {
+      "name": "Veil Cyborg", "category": "infantry", "faction": "veil",
+      "cost": 400, "build_time": 6, "hp": 220, "armor": "infantry",
+      "speed": 1.7, "radius": 0.2, "weapon": "cyborg_gun", "model": "cyborg", "height": 0.9,
+      "prereq": ["barracks"], "networked": true, "voice": "cyborg"
+    },
+    "veil_artillery": {
+      "name": "Veil Artillery", "category": "vehicle", "faction": "veil", "buildable": false,
+      "cost": 900, "build_time": 10, "hp": 300, "armor": "light",
+      "speed": 1.6, "radius": 0.5, "weapon": "artillery", "model": "artillery", "height": 1.0,
+      "prereq": [], "voice": "veil_vehicle"
+    },
+    "convoy_truck": {
+      "name": "Veil Convoy Truck", "category": "vehicle", "faction": "veil", "buildable": false,
+      "cost": 500, "build_time": 1, "hp": 520, "armor": "heavy",
+      "speed": 1.4, "radius": 0.55, "model": "truck", "height": 1.1, "civilian": true,
+      "prereq": [], "voice": "veil_vehicle"
+    },
+    "kestrel": {
+      "name": "Kestrel Ruiz", "category": "infantry", "faction": "veil", "buildable": false, "hero": true,
+      "cost": 0, "build_time": 1, "hp": 900, "armor": "infantry",
+      "speed": 2.2, "radius": 0.22, "weapon": "kestrel_rifle", "model": "kestrel", "height": 0.9,
+      "prereq": [], "voice": "kestrel"
+    },
+
+    "outcast_fighter": {
+      "name": "Outcast Fighter", "category": "infantry", "faction": "outcast", "buildable": false, "outcast": true,
+      "cost": 150, "build_time": 4, "hp": 130, "armor": "infantry",
+      "speed": 1.9, "radius": 0.2, "weapon": "outcast_rifle", "model": "outcast", "height": 0.8,
+      "prereq": [], "voice": "outcast"
+    },
+    "outcast_brute": {
+      "name": "Outcast Brute", "category": "infantry", "faction": "outcast", "buildable": false, "outcast": true,
+      "cost": 400, "build_time": 6, "hp": 420, "armor": "infantry",
+      "speed": 1.7, "radius": 0.26, "weapon": "brute_club", "model": "brute", "height": 1.1,
+      "prereq": [], "voice": "brute"
+    },
+    "tallow": {
+      "name": "Tallow", "category": "infantry", "faction": "outcast", "buildable": false, "hero": true, "outcast": true,
+      "cost": 0, "build_time": 1, "hp": 800, "armor": "infantry",
+      "speed": 2.0, "radius": 0.22, "weapon": "tallow_rifle", "model": "tallow", "height": 0.9,
+      "prereq": [], "voice": "tallow"
+    },
+
+    "lindqvist": {
+      "name": "Dr. Soren Lindqvist", "category": "infantry", "faction": "bastion", "buildable": false, "hero": true,
+      "cost": 0, "build_time": 1, "hp": 500, "armor": "infantry",
+      "speed": 1.9, "radius": 0.2, "model": "scientist", "height": 0.8,
+      "prereq": [], "voice": "lindqvist"
+    },
+    "civilian": {
+      "name": "Civilian", "category": "infantry", "faction": "any", "buildable": false, "civilian": true,
+      "cost": 0, "build_time": 1, "hp": 60, "armor": "infantry",
+      "speed": 1.7, "radius": 0.16, "model": "civilian", "height": 0.7,
+      "prereq": [], "voice": "civilian"
+    },
+    "bus": {
+      "name": "Civilian Bus", "category": "vehicle", "faction": "any", "buildable": false, "civilian": true,
+      "cost": 0, "build_time": 1, "hp": 400, "armor": "light",
+      "speed": 2.0, "radius": 0.55, "model": "bus", "height": 1.1,
+      "prereq": [], "voice": "bus"
+    },
+    "supply_truck": {
+      "name": "Medical Supply Truck", "category": "vehicle", "faction": "bastion", "buildable": false, "civilian": true,
+      "cost": 0, "build_time": 1, "hp": 450, "armor": "light",
+      "speed": 2.2, "radius": 0.5, "model": "truck", "height": 1.1,
+      "prereq": [], "voice": "truck"
+    },
+    "damper": {
+      "name": "Resonance Damper", "category": "vehicle", "faction": "bastion", "buildable": false, "shelter": 3.5,
+      "cost": 0, "build_time": 1, "hp": 1500, "armor": "heavy",
+      "speed": 1.6, "radius": 0.6, "model": "damper", "height": 1.3,
+      "prereq": [], "voice": "damper"
+    },
+
+    "floater": {
+      "name": "Crystal Floater", "category": "vehicle", "faction": "creature", "buildable": false, "move": "hover",
+      "cost": 0, "build_time": 1, "hp": 180, "armor": "light",
+      "speed": 1.4, "radius": 0.45, "weapon": "spore_spit", "model": "floater", "height": 1.4,
+      "prereq": [], "voice": "creature"
+    },
+    "fiend": {
+      "name": "Crystal Fiend", "category": "vehicle", "faction": "creature", "buildable": false,
+      "cost": 0, "build_time": 1, "hp": 260, "armor": "light",
+      "speed": 3.6, "radius": 0.4, "weapon": "claws", "model": "fiend", "height": 0.8,
+      "prereq": [], "voice": "creature"
+    },
+    "choir": {
+      "name": "The Choir", "category": "vehicle", "faction": "veil", "buildable": false,
+      "cost": 0, "build_time": 1, "hp": 9000, "armor": "heavy",
+      "speed": 1.0, "radius": 1.3, "weapon": "choir_beam", "model": "choir", "height": 3.0,
+      "prereq": [], "voice": "creature"
     }
   },
 
@@ -122,11 +326,230 @@
       "size": [3, 3], "power": -40, "model": "war_factory", "height": 1.8,
       "produces": ["vehicle"], "prereq": ["refinery"]
     },
+    "radar": {
+      "name": "Radar", "category": "structure", "faction": "bastion",
+      "cost": 1000, "build_time": 10, "hp": 800, "armor": "structure",
+      "size": [2, 2], "power": -40, "model": "radar", "height": 1.8,
+      "radar": true, "prereq": ["refinery"]
+    },
+    "service_depot": {
+      "name": "Service Depot", "category": "structure", "faction": "bastion",
+      "cost": 800, "build_time": 10, "hp": 900, "armor": "structure",
+      "size": [3, 3], "power": -30, "model": "service_depot", "height": 1.2,
+      "repair_vehicles": 3.0, "prereq": ["war_factory"]
+    },
+    "helipad": {
+      "name": "Helipad", "category": "structure", "faction": "bastion",
+      "cost": 900, "build_time": 10, "hp": 700, "armor": "structure",
+      "size": [2, 2], "power": -30, "model": "helipad", "height": 0.6,
+      "produces": ["aircraft"], "prereq": ["radar"]
+    },
+    "tech_center": {
+      "name": "Tech Center", "category": "structure", "faction": "bastion",
+      "cost": 1800, "build_time": 16, "hp": 900, "armor": "structure",
+      "size": [2, 2], "power": -60, "model": "tech_center", "height": 2.0,
+      "prereq": ["war_factory", "radar"]
+    },
+    "lance_uplink": {
+      "name": "Halo Lance Uplink", "category": "structure", "faction": "bastion", "limit": 1,
+      "cost": 2500, "build_time": 25, "hp": 1200, "armor": "structure",
+      "size": [3, 3], "power": -100, "model": "uplink", "height": 2.6,
+      "superweapon": "halo_lance", "charge_time": 240, "prereq": ["tech_center"]
+    },
+    "veil_foundry": {
+      "name": "Veil Foundry", "category": "structure", "faction": "veil", "buildable": false,
+      "cost": 1200, "build_time": 14, "hp": 1300, "armor": "structure",
+      "size": [3, 3], "power": 0, "model": "veil_foundry", "height": 1.8,
+      "produces": ["veil"], "prereq": []
+    },
+    "decoy": {
+      "name": "Decoy Structure", "category": "structure", "faction": "bastion",
+      "cost": 150, "build_time": 4, "hp": 250, "armor": "structure",
+      "size": [3, 3], "power": 0, "model": "decoy", "height": 1.8, "decoy": true,
+      "prereq": ["construction_yard"]
+    },
     "guard_tower": {
       "name": "Guard Tower", "category": "defense", "faction": "any",
       "cost": 500, "build_time": 8, "hp": 550, "armor": "structure",
       "size": [1, 1], "power": -20, "model": "guard_tower", "height": 1.6,
       "weapon": "tower_cannon", "prereq": ["barracks"]
+    },
+    "sensor_tower": {
+      "name": "Sensor Tower", "category": "defense", "faction": "bastion",
+      "cost": 400, "build_time": 6, "hp": 400, "armor": "structure",
+      "size": [1, 1], "power": -15, "model": "sensor_tower", "height": 2.2,
+      "detector": 8, "prereq": ["radar"]
+    },
+    "inhibitor_pylon": {
+      "name": "Inhibitor Pylon", "category": "defense", "faction": "bastion",
+      "cost": 350, "build_time": 5, "hp": 500, "armor": "structure",
+      "size": [1, 1], "power": -30, "model": "inhibitor", "height": 2.0,
+      "inhibitor": 4.5, "prereq": ["power_plant"]
+    },
+    "resonance_shelter": {
+      "name": "Resonance Shelter", "category": "defense", "faction": "bastion",
+      "cost": 600, "build_time": 8, "hp": 700, "armor": "structure",
+      "size": [2, 2], "power": -30, "model": "shelter", "height": 1.2,
+      "shelter": 4.0, "prereq": ["power_plant"]
+    },
+    "lance_beacon": {
+      "name": "Lance Beacon", "category": "defense", "faction": "bastion", "limit": 3,
+      "cost": 200, "build_time": 4, "hp": 900, "armor": "structure",
+      "size": [1, 1], "power": 0, "model": "beacon", "height": 1.8,
+      "prereq": ["construction_yard"]
+    },
+
+    "veil_pylon": {
+      "name": "Veil Power Pylon", "category": "structure", "faction": "veil", "buildable": false,
+      "cost": 200, "build_time": 1, "hp": 300, "armor": "structure",
+      "size": [1, 1], "power": 60, "model": "pylon", "height": 2.2, "prereq": []
+    },
+    "veil_substation": {
+      "name": "Veil Substation", "category": "structure", "faction": "veil", "buildable": false,
+      "cost": 400, "build_time": 1, "hp": 600, "armor": "structure",
+      "size": [2, 2], "power": 150, "model": "substation", "height": 1.4, "prereq": []
+    },
+    "stealth_generator": {
+      "name": "Stealth Generator", "category": "structure", "faction": "veil", "buildable": false,
+      "cost": 2000, "build_time": 1, "hp": 1400, "armor": "structure",
+      "size": [2, 2], "power": -100, "model": "stealth_gen", "height": 2.4, "prereq": []
+    },
+    "spire": {
+      "name": "Spire of Judgment", "category": "defense", "faction": "veil", "buildable": false,
+      "cost": 1500, "build_time": 1, "hp": 1400, "armor": "structure",
+      "size": [1, 1], "power": 0, "model": "spire", "height": 3.2, "weapon": "laser", "prereq": []
+    },
+    "veil_gate": {
+      "name": "Sanctum Gatehouse", "category": "defense", "faction": "veil", "buildable": false,
+      "cost": 1000, "build_time": 1, "hp": 2200, "armor": "structure",
+      "size": [3, 2], "power": 0, "model": "gatehouse", "height": 2.0, "weapon": "tower_cannon", "prereq": []
+    },
+    "artillery_nest": {
+      "name": "Artillery Emplacement", "category": "defense", "faction": "veil", "buildable": false,
+      "cost": 900, "build_time": 1, "hp": 900, "armor": "structure",
+      "size": [2, 2], "power": 0, "model": "artillery_nest", "height": 1.4, "weapon": "artillery", "prereq": []
+    },
+    "flak_nest": {
+      "name": "Flak Nest", "category": "defense", "faction": "veil", "buildable": false,
+      "cost": 600, "build_time": 1, "hp": 600, "armor": "structure",
+      "size": [1, 1], "power": 0, "model": "flak_nest", "height": 1.4, "weapon": "flak", "prereq": []
+    },
+    "veil_camp": {
+      "name": "Veil Raider Camp", "category": "structure", "faction": "veil", "buildable": false,
+      "cost": 800, "build_time": 1, "hp": 900, "armor": "structure",
+      "size": [2, 2], "power": 0, "model": "tent", "height": 1.2, "produces": ["infantry"], "prereq": []
+    },
+    "sibyl_relay": {
+      "name": "SIBYL Relay Tower", "category": "defense", "faction": "veil", "buildable": false,
+      "cost": 2000, "build_time": 1, "hp": 1800, "armor": "structure",
+      "size": [2, 2], "power": 0, "model": "relay", "height": 3.4, "prereq": []
+    },
+    "shaft_guardian": {
+      "name": "Shaft Guardian", "category": "defense", "faction": "veil", "buildable": false,
+      "cost": 3000, "build_time": 1, "hp": 4000, "armor": "structure",
+      "size": [3, 3], "power": 0, "model": "guardian", "height": 3.6, "weapon": "guardian_beam", "prereq": []
+    },
+    "sibyl_core": {
+      "name": "SIBYL Core", "category": "structure", "faction": "veil", "buildable": false,
+      "cost": 5000, "build_time": 1, "hp": 6000, "armor": "structure",
+      "size": [3, 3], "power": 0, "model": "core", "height": 3.0, "prereq": []
+    },
+
+    "tech_power_station": {
+      "name": "Coal Power Station", "category": "structure", "faction": "any", "buildable": false, "capturable": true,
+      "cost": 1000, "build_time": 1, "hp": 1500, "armor": "structure",
+      "size": [3, 3], "power": 200, "model": "coal_plant", "height": 2.4, "prereq": []
+    },
+    "dam_control": {
+      "name": "Kharim Dam Control", "category": "structure", "faction": "any", "buildable": false, "capturable": true,
+      "cost": 1000, "build_time": 1, "hp": 2000, "armor": "structure", "invulnerable": true,
+      "size": [2, 2], "power": 0, "model": "dam_control", "height": 1.8, "prereq": []
+    },
+    "dam_pillar": {
+      "name": "Dam Support Pillar", "category": "structure", "faction": "any", "buildable": false, "invulnerable": true,
+      "cost": 0, "build_time": 1, "hp": 5000, "armor": "structure",
+      "size": [1, 1], "power": 0, "model": "pillar", "height": 2.2, "prereq": []
+    },
+    "water_station": {
+      "name": "Water Station", "category": "structure", "faction": "any", "buildable": false, "capturable": true,
+      "cost": 500, "build_time": 1, "hp": 1200, "armor": "structure", "invulnerable": true,
+      "size": [2, 2], "power": 0, "model": "water_station", "height": 2.0, "prereq": []
+    },
+    "bridge": {
+      "name": "Rail Bridge", "category": "structure", "faction": "any", "buildable": false, "no_footprint": true, "targetable": true,
+      "cost": 0, "build_time": 1, "hp": 1600, "armor": "structure",
+      "size": [3, 3], "power": 0, "model": "bridge", "height": 0.6, "prereq": []
+    },
+    "mine_exit": {
+      "name": "Old Mine Exit", "category": "structure", "faction": "any", "buildable": false, "invulnerable": true,
+      "cost": 0, "build_time": 1, "hp": 1000, "armor": "structure",
+      "size": [2, 2], "power": 0, "model": "mine_exit", "height": 1.2, "prereq": []
+    },
+    "command_bunker": {
+      "name": "Rourke's Command Bunker", "category": "structure", "faction": "bastion", "buildable": false,
+      "cost": 2000, "build_time": 1, "hp": 2400, "armor": "structure",
+      "size": [3, 3], "power": 0, "model": "bunker", "height": 1.4, "weapon": "tower_cannon", "prereq": []
+    },
+    "brigade_hq": {
+      "name": "Brigade Field HQ", "category": "structure", "faction": "bastion", "buildable": false, "capturable": true,
+      "cost": 1500, "build_time": 1, "hp": 1600, "armor": "structure",
+      "size": [3, 2], "power": 0, "model": "field_hq", "height": 1.6, "prereq": []
+    },
+    "lance_control": {
+      "name": "Lance Control Core", "category": "structure", "faction": "bastion", "buildable": false, "capturable": true, "invulnerable": true,
+      "cost": 5000, "build_time": 1, "hp": 5000, "armor": "structure",
+      "size": [3, 3], "power": 0, "model": "uplink", "height": 2.8, "prereq": []
+    },
+    "lance_relay": {
+      "name": "Lance Power Relay", "category": "structure", "faction": "bastion", "buildable": false,
+      "cost": 1500, "build_time": 1, "hp": 1800, "armor": "structure",
+      "size": [2, 2], "power": 0, "model": "lance_relay", "height": 2.6, "prereq": []
+    },
+    "clear_zone_gate": {
+      "name": "Clear Zone Main Gate", "category": "structure", "faction": "bastion", "buildable": false,
+      "cost": 3000, "build_time": 1, "hp": 5000, "armor": "structure",
+      "size": [4, 2], "power": 0, "model": "city_gate", "height": 2.4, "prereq": []
+    },
+    "data_node": {
+      "name": "SIBYL Data Node", "category": "structure", "faction": "veil", "buildable": false, "invulnerable": true,
+      "cost": 0, "build_time": 1, "hp": 800, "armor": "structure",
+      "size": [1, 1], "power": 0, "model": "data_node", "height": 1.0, "prereq": []
+    },
+
+    "maw": {
+      "name": "The Maw", "category": "structure", "faction": "any", "buildable": false, "invulnerable": true, "targetable": true,
+      "cost": 0, "build_time": 1, "hp": 6000, "armor": "structure",
+      "size": [2, 2], "power": 0, "model": "maw", "height": 1.4, "prereq": []
+    },
+    "blossom_tree": {
+      "name": "Blossom Tree", "category": "structure", "faction": "any", "buildable": false, "targetable": true,
+      "cost": 0, "build_time": 1, "hp": 150, "armor": "structure",
+      "size": [1, 1], "power": 0, "model": "blossom", "height": 1.8, "prereq": []
+    },
+    "house": {
+      "name": "Farmhouse", "category": "structure", "faction": "any", "buildable": false, "decor": true,
+      "cost": 0, "build_time": 1, "hp": 500, "armor": "structure",
+      "size": [2, 2], "power": 0, "model": "house", "height": 1.4, "prereq": []
+    },
+    "church": {
+      "name": "Collapsed Church", "category": "structure", "faction": "any", "buildable": false, "decor": true, "invulnerable": true,
+      "cost": 0, "build_time": 1, "hp": 800, "armor": "structure",
+      "size": [2, 3], "power": 0, "model": "church", "height": 2.4, "prereq": []
+    },
+    "hut": {
+      "name": "Village Hut", "category": "structure", "faction": "any", "buildable": false, "decor": true,
+      "cost": 0, "build_time": 1, "hp": 300, "armor": "structure",
+      "size": [1, 1], "power": 0, "model": "hut", "height": 1.0, "prereq": []
+    },
+    "tent_civ": {
+      "name": "Nomad Tent", "category": "structure", "faction": "any", "buildable": false, "decor": true,
+      "cost": 0, "build_time": 1, "hp": 200, "armor": "structure",
+      "size": [1, 1], "power": 0, "model": "tent", "height": 0.8, "prereq": []
+    },
+    "sanctum": {
+      "name": "The Sanctum", "category": "structure", "faction": "veil", "buildable": false, "invulnerable": true,
+      "cost": 0, "build_time": 1, "hp": 20000, "armor": "structure",
+      "size": [6, 5], "power": 0, "model": "sanctum", "height": 4.0, "prereq": []
     }
   }
 }
