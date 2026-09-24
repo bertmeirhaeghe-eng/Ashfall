@@ -276,7 +276,7 @@ func _apply_field(_dt: float) -> void:
 	for e in G.entities:
 		if e.team != ENEMY or not e.alive:
 			continue
-		var inside: bool = active and e.position.distance_to(gen.position) <= FIELD_R
+		var inside: bool = active and G.flat_dist(e.position, gen.position) <= FIELD_R
 		if e.force_hidden != inside:
 			e.force_hidden = inside
 			e.detected_mask = -2

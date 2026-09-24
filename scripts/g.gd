@@ -157,7 +157,7 @@ func spawn_unit(id: String, team: int, pos: Vector3) -> Unit:
 	else:
 		u = Unit.new()
 	u.setup(id, team)
-	u.position = Vector3(pos.x, 0.0, pos.z)
+	u.position = Vector3(pos.x, map.height_at(pos), pos.z)
 	world.add_child(u)
 	register(u)
 	if mission:
@@ -320,7 +320,7 @@ func update_visibility(delta: float) -> void:
 		if e.hidden_now():
 			for d in detectors:
 				var r: float = d.detector_radius()
-				if e.position.distance_to(d.position) <= r + e.radius:
+				if G.flat_dist(e.position, d.position) <= r + e.radius:
 					mask |= _team_mask(d.team)
 		else:
 			mask = -1
@@ -390,3 +390,8 @@ func notify(team: int, msg: String, speak := false) -> void:
 		hud.notify(msg)
 	if speak:
 		Voice.eva(msg)
+
+
+## Distance on the ground plane (ignores terrain height).
+func flat_dist(a: Vector3, b: Vector3) -> float:
+	return Vector2(a.x - b.x, a.z - b.z).length()

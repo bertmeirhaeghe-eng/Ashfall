@@ -215,7 +215,7 @@ func _can_move() -> bool:
 func remaining_path() -> float:
 	if path_i >= path.size():
 		return 0.0
-	var d := position.distance_to(path[path_i])
+	var d := G.flat_dist(position, path[path_i])
 	for i in range(path_i, path.size() - 1):
 		d += (path[i] as Vector3).distance_to(path[i + 1])
 	return d
@@ -233,7 +233,7 @@ func follow_path(delta: float) -> bool:
 	var spd := speed * speed_mult * (1.3 if burrowed else 1.0)
 	var step := spd * delta
 	if dist <= step:
-		position = Vector3(wp.x, 0.0, wp.z)
+		position = Vector3(wp.x, position.y, wp.z)
 		path_i += 1
 	else:
 		var np := position + to / dist * step
@@ -250,7 +250,7 @@ func follow_path(delta: float) -> bool:
 	_moving = true
 	var goal: Vector3 = path[path.size() - 1]
 	if Vector2(goal.x - position.x, goal.z - position.z).length() < 1.3:
-		if position.distance_to(_last_pos) < spd * delta * 0.3:
+		if G.flat_dist(position, _last_pos) < spd * delta * 0.3:
 			_stuck_t += delta
 			if _stuck_t > 0.5:
 				path_i = path.size()
@@ -270,7 +270,7 @@ func nudge(v: Vector3) -> void:
 	var np := position + v
 	var c: Vector2i = G.map.world_to_cell(np)
 	if G.map.passable(c, move_class):
-		position = Vector3(np.x, 0.0, np.z)
+		position = Vector3(np.x, position.y, np.z)
 
 
 func _chase(t: Entity, delta: float) -> void:
@@ -289,6 +289,10 @@ func _chase(t: Entity, delta: float) -> void:
 
 
 # ---------------------------------------------------------------- per-frame
+
+func _process(delta: float) -> void:
+	super._process(delta)
+	position.y = G.map.height_at(position)  # ride the terrain
 
 func _physics_process(delta: float) -> void:
 	if not alive:
@@ -381,14 +385,14 @@ func _do_medic(delta: float) -> void:
 			var best_d := 6.0
 			for e in G.entities:
 				if e is Unit and e != self and e.alive and e.is_infantry and G.is_friend(team, e.team) and e.hp < e.max_hp - 1.0:
-					var d: float = e.position.distance_to(position)
+					var d: float = G.flat_dist(e.position, position)
 					if d < best_d:
 						best_d = d
 						_heal_target = e
 		if _heal_target == null and has_path():
 			follow_path(delta)
 		return
-	if _heal_target.position.distance_to(position) < 1.4:
+	if G.flat_dist(_heal_target.position, position) < 1.4:
 		path.clear()
 		path_i = 0
 		_heal_target.heal(float(def["heal"]) * delta)
@@ -494,5 +498,6 @@ func _animate(delta: float) -> void:
 	elif model.has_meta("walker"):
 		model.position.y = absf(sin(_anim_t * 6.0)) * 0.06
 		var legs: Array = model.get_meta("legs", [])
+		var swing := float(model.get_meta("leg_swing", 0.4))
 		for i in legs.size():
-			legs[i].rotation.x = sin(_anim_t * 6.0 + PI * i) * 0.4
+			legs[i].rotation.x = sin(_anim_t * 6.0 + PI * i) * swing

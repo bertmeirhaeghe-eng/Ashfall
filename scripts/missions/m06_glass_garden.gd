@@ -140,7 +140,7 @@ func _inhibit_set(inh: Array) -> Dictionary:
 func _inhibited(c: Vector2i, inh: Array) -> bool:
 	var p := cell_pos(c)
 	for s in inh:
-		if s.position.distance_to(p) <= s.inhibitor_radius():
+		if G.flat_dist(s.position, p) <= s.inhibitor_radius():
 			return true
 	return false
 
@@ -296,7 +296,7 @@ func _sampling(delta: float) -> void:
 		if sampling.get(i, 0.0) < 0.0:
 			continue
 		var spot := cell_pos(SAMPLE_SPOTS[i])
-		if lindqvist.position.distance_to(spot) <= 1.8:
+		if G.flat_dist(lindqvist.position, spot) <= 1.8:
 			sampling[i] = float(sampling.get(i, 0.0)) + delta
 			if randf() < delta * 4.0:
 				Fx.sparkle(spot + Vector3(0, 0.4, 0), Color(0.6, 1.5, 1.0))
@@ -310,7 +310,7 @@ func _sampling(delta: float) -> void:
 				else:
 					_last_sample()
 			return
-		if samples == 0 and not _once.has("spots") and lindqvist.position.distance_to(cell_pos(HEART)) < 12.0:
+		if samples == 0 and not _once.has("spots") and G.flat_dist(lindqvist.position, cell_pos(HEART)) < 12.0:
 			_once["spots"] = true
 			for k in SAMPLE_SPOTS.size():
 				add_marker("spot%d" % k, cell_pos(SAMPLE_SPOTS[k]), Color(0.6, 0.9, 1.0))

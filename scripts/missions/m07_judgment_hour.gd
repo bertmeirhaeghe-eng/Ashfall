@@ -256,7 +256,7 @@ func _sanctum_destroyed(_p: Vector3) -> void:
 		Fx.explosion(sanctum.position + Vector3(randf_range(-8, 8), randf_range(0, 4), randf_range(-6, 6)), 3.0)
 	Fx.ring(sanctum.position, Color(1, 1, 0.95), 26.0, 2.0)
 	for e in G.entities.duplicate():
-		if e.alive and e.team == ENEMY and e.position.distance_to(sanctum.position) < 20.0:
+		if e.alive and e.team == ENEMY and G.flat_dist(e.position, sanctum.position) < 20.0:
 			e.invulnerable = false
 			e.die(null)
 	say("rourke", "The Sanctum is gone. Mother Oriel is dead. It's over.")

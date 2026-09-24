@@ -1,0 +1,7 @@
+numpy
+trimesh
+scipy
+networkx
+shapely
+mapbox_earcut
+embreex

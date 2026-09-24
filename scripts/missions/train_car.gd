@@ -54,7 +54,7 @@ func display_name() -> String:
 
 
 func place(pos: Vector3, dir: Vector3) -> void:
-	position = pos
+	position = Vector3(pos.x, G.map.height_at(pos), pos.z)
 	if dir.length_squared() > 0.0001:
 		model.rotation.y = atan2(dir.x, dir.z)
 

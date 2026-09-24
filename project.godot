@@ -18,6 +18,7 @@ general/text_to_speech=true
 
 G="*res://scripts/g.gd"
 Voice="*res://scripts/voice.gd"
+Music="*res://scripts/music.gd"
 Campaign="*res://scripts/campaign.gd"
 TestRunner="*res://scripts/dev/test_runner.gd"
 

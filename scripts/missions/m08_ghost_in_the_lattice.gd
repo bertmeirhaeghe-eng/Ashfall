@@ -49,7 +49,7 @@ func theme() -> Dictionary:
 func build_map(map: MapGrid) -> void:
 	map.init_blank(W, H, 8808, {
 		"ground": Color(0.17, 0.17, 0.19), "rock": Color(0.2, 0.19, 0.2), "building": Color(0.1, 0.1, 0.11),
-		"block": Color(0.3, 0.28, 0.3), "variation": 0.03, "water": Color(0.06, 0.1, 0.16),
+		"block": Color(0.3, 0.28, 0.3), "variation": 0.03, "water": Color(0.06, 0.1, 0.16), "hills": 0.3,
 	})
 	# the Bosphorus on the east edge
 	map.fill_rect(Rect2i(W - 6, 1, 5, H - 2), MapGrid.Terrain.WATER)
@@ -230,7 +230,7 @@ func _hijack(delta: float) -> void:
 		if not hardened:
 			for i in towers.size():
 				var t = towers[i]
-				if is_instance_valid(t) and t.alive and e.position.distance_to(t.position) <= FIELD_R:
+				if is_instance_valid(t) and t.alive and G.flat_dist(e.position, t.position) <= FIELD_R:
 					in_field = i
 					break
 		if in_field >= 0:

@@ -447,7 +447,7 @@ func focus(cell: Vector2i) -> void:
 func add_marker(key: String, pos: Vector3, color: Color, label := "") -> void:
 	remove_marker(key)
 	var n := MeshFactory.marker_pillar(color)
-	n.position = Vector3(pos.x, 0, pos.z)
+	n.position = Vector3(pos.x, G.map.height_at(pos), pos.z)
 	G.world.add_child(n)
 	markers.append({"key": key, "pos": pos, "color": color, "label": label, "node": n})
 

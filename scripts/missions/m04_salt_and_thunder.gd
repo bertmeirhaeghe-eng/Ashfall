@@ -53,7 +53,7 @@ func theme() -> Dictionary:
 func build_map(map: MapGrid) -> void:
 	map.init_blank(W, H, 4404, {
 		"ground": Color(0.44, 0.35, 0.24), "rock": Color(0.36, 0.27, 0.19), "water": Color(0.12, 0.35, 0.42),
-		"variation": 0.04,
+		"variation": 0.04, "hills": 1.0,
 	})
 	map.scatter(MapGrid.Terrain.ROCK, 16, 1.2, 2.6, [[BASE, 12], [DAM_CTRL, 5], [NOMADS, 6], [EVAC, 4], [Vector2i(56, 40), 14]])
 	# the dry riverbed
@@ -75,6 +75,7 @@ func build_map(map: MapGrid) -> void:
 					riverbed.erase(Vector2i(x, y))
 	for c in riverbed.keys():
 		map.set_terrain(c, MapGrid.Terrain.GROUND)
+		map.mark_low(c)
 		map.tints[c] = Color(0.4, 0.33, 0.23)
 	for isl in ISLANDS:
 		map.tint_blob(isl, 3.2, Color(0.56, 0.46, 0.32))
@@ -242,7 +243,7 @@ func _check_charges() -> void:
 			# the engineer must stay next to the pillar until the charge is armed
 			var planter_ok := false
 			for u in team_units(PLAYER):
-				if u.has_meta("planting") and u.get_meta("planting") == p and u.position.distance_to(p.position) < 2.5:
+				if u.has_meta("planting") and u.get_meta("planting") == p and G.flat_dist(u.position, p.position) < 2.5:
 					planter_ok = true
 			if not planter_ok:
 				charge[p] = 0.0
@@ -344,13 +345,13 @@ func _check_nomads() -> void:
 	for cv in tagged("nomad"):
 		if cv.team == NEUTRAL and team_near(cv.position, PLAYER, 6.0):
 			for o in tagged("nomad"):
-				if o.team == NEUTRAL and o.position.distance_to(cv.position) < 8.0:
+				if o.team == NEUTRAL and G.flat_dist(o.position, cv.position) < 8.0:
 					o.set_team(PLAYER)
 					o.hold_position = false
 					o.cmd_move(EVAC + Vector2i(randi_range(-2, 2), randi_range(-2, 2)))
 			say_once("nomad_line", "civilian", "Soldiers! You say the river is coming back? We're going, we're going!")
 		elif cv.team == PLAYER:
-			if cv.position.distance_to(cell_pos(EVAC)) < 4.0:
+			if G.flat_dist(cv.position, cell_pos(EVAC)) < 4.0:
 				nomads_saved += 1
 				cv.remove_silently()
 			elif cv.order == Unit.Order.IDLE:

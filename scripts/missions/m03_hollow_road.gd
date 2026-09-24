@@ -169,7 +169,7 @@ func _lead() -> void:
 		return
 	var group: Array = tagged("guides") + ([tallow] if is_instance_valid(tallow) and tallow.alive else [])
 	var target: Vector2i = ROUTE_WP[wp_i]
-	var there := tallow.position.distance_to(cell_pos(target)) < 4.0
+	var there := G.flat_dist(tallow.position, cell_pos(target)) < 4.0
 	var bastion_close := team_near(tallow.position, PLAYER, 10.0)
 	if there and bastion_close:
 		wp_i += 1
@@ -187,7 +187,7 @@ func _lead() -> void:
 		attack_move(group, target)
 	elif not there:
 		for g in group:
-			if g.order == Unit.Order.IDLE and g.position.distance_to(cell_pos(target)) > 4.0:
+			if g.order == Unit.Order.IDLE and G.flat_dist(g.position, cell_pos(target)) > 4.0:
 				g.cmd_attack_move(G.map.spread_cells(target, 1)[0] + Vector2i(randi_range(-2, 2), randi_range(-2, 2)))
 	elif once("wait_line_%d" % wp_i):
 		say("tallow", "We're waiting, Bastion. The glass doesn't.")
@@ -223,7 +223,7 @@ func _update_maws(dt: float) -> void:
 		for e in G.entities.duplicate():
 			if not (e is Unit) or not e.alive or e.is_air or e.move_class == "jump" and e.is_moving():
 				continue
-			if e.position.distance_to(mw.position) <= r:
+			if G.flat_dist(e.position, mw.position) <= r:
 				e.tags["maw_hit"] = time
 				e.take_damage(dps * dt, "claw", null)
 				if randf() < 0.3:
@@ -302,7 +302,7 @@ func _drive_convoy() -> void:
 				lose("Three convoy trucks escaped with the Codex data.")
 				return
 			continue
-		if t.position.distance_to(cell_pos(CONVOY_PATH[i])) < 2.0 and i < CONVOY_PATH.size() - 1:
+		if G.flat_dist(t.position, cell_pos(CONVOY_PATH[i])) < 2.0 and i < CONVOY_PATH.size() - 1:
 			truck_wp[t] = i + 1
 			t.cmd_move(CONVOY_PATH[i + 1])
 		elif t.order == Unit.Order.IDLE:
@@ -316,7 +316,7 @@ func _drive_convoy() -> void:
 	for u in _escort:
 		if not (is_instance_valid(u) and u.alive):
 			continue
-		if lead and u.order == Unit.Order.IDLE and u.position.distance_to(lead.position) > 5.0:
+		if lead and u.order == Unit.Order.IDLE and G.flat_dist(u.position, lead.position) > 5.0:
 			u.cmd_attack_move(G.map.world_to_cell(lead.position) + Vector2i(randi_range(-2, 2), randi_range(-2, 2)))
 	if trucks.is_empty() and destroyed + escaped >= 5 and is_active("convoy"):
 		complete("convoy")
@@ -329,7 +329,7 @@ func _update_convoy_text() -> void:
 func _check_caches() -> void:
 	for c in caches.duplicate():
 		for u in team_units(PLAYER):
-			if u.position.distance_to(c[0]) < 1.8:
+			if G.flat_dist(u.position, c[0]) < 1.8:
 				caches.erase(c)
 				remove_marker(c[1])
 				if is_active("data"):
@@ -345,7 +345,7 @@ func _check_supply() -> void:
 		fail("supply")
 		say("tallow", "Your medicine burned in the glass. Words are cheap, Bastion.")
 		return
-	if supply.position.distance_to(cell_pos(VILLAGE)) < 5.0:
+	if G.flat_dist(supply.position, cell_pos(VILLAGE)) < 5.0:
 		complete("supply")
 		remove_marker("village")
 		pending_flags["tallow_friendly"] = true

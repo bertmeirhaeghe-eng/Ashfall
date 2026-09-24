@@ -64,7 +64,7 @@ func theme() -> Dictionary:
 func build_map(map: MapGrid) -> void:
 	map.init_blank(W, H, 5505, {
 		"ground": Color(0.62, 0.47, 0.32), "rock": Color(0.45, 0.32, 0.22), "water": Color(0.08, 0.1, 0.12),
-		"variation": 0.05,
+		"variation": 0.05, "hills": 1.0,
 	})
 	map.scatter(MapGrid.Terrain.ROCK, 18, 1.2, 2.6, [[BASE, 12], [Vector2i(60, 12), 6], [Vector2i(76, 44), 12], [Vector2i(40, 44), 10], [Vector2i(58, 80), 12]])
 	# ravines on the eastern side, crossed by the rail bridges
@@ -189,7 +189,7 @@ func _closest_d(pos: Vector3) -> float:
 	var d := 0.0
 	while d < total_len():
 		var p: Vector3 = _point_at(d)[0]
-		var dd := p.distance_to(pos)
+		var dd := G.flat_dist(p, pos)
 		if dd < best_dist:
 			best_dist = dd
 			best = d

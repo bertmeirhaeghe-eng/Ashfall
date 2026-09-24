@@ -198,18 +198,18 @@ func _command_army() -> void:
 	var best := defend_radius
 	for e in G.entities:
 		if e.alive and e is Unit and G.is_enemy(p.id, e.team) and e.visible_to(p.id):
-			var d: float = e.position.distance_to(base_center)
+			var d: float = G.flat_dist(e.position, base_center)
 			if d < best:
 				best = d
 				threat = e
 	if threat:
 		var tc: Vector2i = G.map.world_to_cell(threat.position)
 		for u in army:
-			if u.order == Unit.Order.IDLE or (u.order == Unit.Order.ATTACK_MOVE and u.position.distance_to(base_center) < defend_radius + 4.0):
+			if u.order == Unit.Order.IDLE or (u.order == Unit.Order.ATTACK_MOVE and G.flat_dist(u.position, base_center) < defend_radius + 4.0):
 				u.cmd_attack_move(tc)
 		return
 	var idle: Array = army.filter(func(u): return u.order == Unit.Order.IDLE)
-	var forward: Array = idle.filter(func(u): return u.position.distance_to(base_center) > 22.0)
+	var forward: Array = idle.filter(func(u): return G.flat_dist(u.position, base_center) > 22.0)
 	if not forward.is_empty():
 		var next_goal := _attack_goal()
 		if next_goal.x > -999:
@@ -228,7 +228,7 @@ func _command_army() -> void:
 	elif not idle.is_empty():
 		var rally: Vector2i = G.map.world_to_cell(base_center + enemy_dir * 9.0)
 		for u in idle:
-			if u.position.distance_to(G.map.cell_to_world(rally)) > 5.0 and not u.has_path():
+			if G.flat_dist(u.position, G.map.cell_to_world(rally)) > 5.0 and not u.has_path():
 				u.cmd_move(G.map.spread_cells(rally, 1)[0] + Vector2i(rng.randi_range(-2, 2), rng.randi_range(-2, 2)))
 
 
@@ -239,7 +239,7 @@ func _attack_goal() -> Vector2i:
 	var best_d := INF
 	for e in G.entities:
 		if e.alive and G.is_enemy(p.id, e.team) and e.visible_to(p.id) and not e.def.get("decor", false):
-			var d: float = e.position.distance_to(base_center)
+			var d: float = G.flat_dist(e.position, base_center)
 			if e is Structure:
 				d *= 0.7
 			if d < best_d:

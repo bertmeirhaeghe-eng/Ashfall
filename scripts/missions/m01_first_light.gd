@@ -213,7 +213,7 @@ func _check_mcv() -> void:
 		return
 	if mcv.team == NEUTRAL:
 		for u in team_units(PLAYER):
-			if u != mcv and u.position.distance_to(mcv.position) < 6.0:
+			if u != mcv and G.flat_dist(u.position, mcv.position) < 6.0:
 				mcv.set_team(PLAYER)
 				remove_marker("mcv")
 				say("sergeant", "MCV crew here! Get us deployed, Commander, before that storm reaches the yard.")
@@ -264,7 +264,7 @@ func _check_buses() -> void:
 				bus_state[town] = "moving"
 				say("civilian", "Bastion! Thank God. We're heading for the rail yard, please cover us!")
 		elif st == "moving":
-			if bus.position.distance_to(cell_pos(EVAC)) < 4.0:
+			if G.flat_dist(bus.position, cell_pos(EVAC)) < 4.0:
 				bus_state[town] = "saved"
 				bus.remove_silently()
 				player().credits += 1000

@@ -233,7 +233,7 @@ func _checks() -> void:
 				say("lindqvist", "The shaft is open! Bring the dampers to the entrance, Commander.")
 		if alive_dampers.size() < 3 and is_active("convoy"):
 			fail("convoy")
-		var at_shaft := alive_dampers.filter(func(d): return d.position.distance_to(cell_pos(SHAFT)) < 7.0)
+		var at_shaft := alive_dampers.filter(func(d): return G.flat_dist(d.position, cell_pos(SHAFT)) < 7.0)
 		if is_done("guardians") and at_shaft.size() == alive_dampers.size() and not _descend_offered:
 			_descend_offered = true
 			if alive_dampers.size() == 3 and is_active("convoy"):
@@ -258,7 +258,7 @@ func _surface(delta: float) -> void:
 		_maw_t = 0.25
 		for mw in tagged("maw"):
 			for e in G.entities:
-				if e is Unit and e.alive and not e.is_air and e.position.distance_to(mw.position) <= 3.0:
+				if e is Unit and e.alive and not e.is_air and G.flat_dist(e.position, mw.position) <= 3.0:
 					e.take_damage(14.0 * 0.25, "claw", null)
 	# glass-storm surges: radar down, aircraft grounded, lightning
 	_storm_t -= delta
@@ -292,7 +292,7 @@ func _hijack(delta: float) -> void:
 	for e in G.entities:
 		if not (e is Unit) or not e.alive or e.team != PLAYER or not e.def.get("networked", false):
 			continue
-		if e.position.distance_to(relay.position) <= 8.0 and time >= float(e.tags.get("hardened_until", -1.0)):
+		if G.flat_dist(e.position, relay.position) <= 8.0 and time >= float(e.tags.get("hardened_until", -1.0)):
 			e.hijack = minf(1.0, e.hijack + delta / 6.0)
 			if e.hijack >= 1.0:
 				e.hijack = 0.0
@@ -329,7 +329,7 @@ func _descend() -> void:
 		if is_instance_valid(h) and h.alive:
 			force.append(h)
 	var rest := team_units(PLAYER).filter(func(u): return not force.has(u) and not (u is Harvester) and u.def_id != "mcv")
-	rest.sort_custom(func(a, b): return a.position.distance_to(cell_pos(SHAFT)) < b.position.distance_to(cell_pos(SHAFT)))
+	rest.sort_custom(func(a, b): return G.flat_dist(a.position, cell_pos(SHAFT)) < G.flat_dist(b.position, cell_pos(SHAFT)))
 	for u in rest:
 		if force.size() >= 30:
 			break
@@ -378,7 +378,7 @@ func _heart(delta: float) -> void:
 		for u in team_units(PLAYER).duplicate():
 			if ring_done.has(u) or not HEART.has_point(Vector2(u.position.x, u.position.z)):
 				continue
-			if u.position.distance_to(cell_pos(SEED)) <= r:
+			if G.flat_dist(u.position, cell_pos(SEED)) <= r:
 				ring_done[u] = true
 				if not _sheltered(u) and not u.tags.has("damper"):
 					Fx.sparkle(u.position + Vector3(0, 0.5, 0), Color(0.5, 1.6, 0.6))
@@ -408,11 +408,11 @@ func _sheltered(u: Unit) -> bool:
 	for e in G.entities:
 		if not e.alive or e.team != PLAYER:
 			continue
-		if e is Unit and e.tags.has("damper") and e.position.distance_to(u.position) <= 3.5:
+		if e is Unit and e.tags.has("damper") and G.flat_dist(e.position, u.position) <= 3.5:
 			return true
-		if e is Unit and e.def_id == "mole_apc" and not e.is_moving() and e.position.distance_to(u.position) <= 3.0:
+		if e is Unit and e.def_id == "mole_apc" and not e.is_moving() and G.flat_dist(e.position, u.position) <= 3.0:
 			return true
-		if e is Structure and e.shelter_radius() > 0.0 and e.position.distance_to(u.position) <= e.shelter_radius():
+		if e is Structure and e.shelter_radius() > 0.0 and G.flat_dist(e.position, u.position) <= e.shelter_radius():
 			return true
 	return false
 
@@ -436,7 +436,7 @@ func _reveal_chambers() -> void:
 func on_deploy(u: Unit) -> bool:
 	if u.tags.has("damper"):
 		for i in CHAMBERS.size():
-			if chamber_state[i] == 0 and u.position.distance_to(cell_pos(CHAMBERS[i])) <= 4.0:
+			if chamber_state[i] == 0 and G.flat_dist(u.position, cell_pos(CHAMBERS[i])) <= 4.0:
 				_start_install(i, u)
 				return true
 		G.notify(PLAYER, "Dampers must be deployed inside a heart-chamber.")
@@ -471,7 +471,7 @@ func _install(delta: float) -> void:
 		if not (is_instance_valid(d) and d.alive) or d.speed_mult == 0.0:
 			continue
 		for i in CHAMBERS.size():
-			if chamber_state[i] == 0 and d.order == Unit.Order.IDLE and d.position.distance_to(cell_pos(CHAMBERS[i])) <= 3.0:
+			if chamber_state[i] == 0 and d.order == Unit.Order.IDLE and G.flat_dist(d.position, cell_pos(CHAMBERS[i])) <= 3.0:
 				_start_install(i, d)
 	var running := 0
 	for i in CHAMBERS.size():
@@ -522,14 +522,14 @@ func _sleep() -> void:
 
 func fire_player_lance(up: Structure, pos: Vector3) -> void:
 	super.fire_player_lance(up, pos)
-	if is_active("lance") and not (is_instance_valid(choir) and choir.alive and pos.distance_to(choir.position) <= 5.0):
+	if is_active("lance") and not (is_instance_valid(choir) and choir.alive and G.flat_dist(pos, choir.position) <= 5.0):
 		after(3.5, func():
 			if is_active("lance"):
 				fail("lance"))
 
 
 func on_lance_struck(pos: Vector3) -> void:
-	if is_instance_valid(choir) and choir.alive and pos.distance_to(choir.position) <= 5.0 and is_active("lance"):
+	if is_instance_valid(choir) and choir.alive and G.flat_dist(pos, choir.position) <= 5.0 and is_active("lance"):
 		shield_cracked = true
 		complete("lance")
 		say("havel", "Direct hit! The Choir's shield is cracked for good!")

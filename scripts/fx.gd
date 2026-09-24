@@ -154,7 +154,8 @@ static func ring(pos: Vector3, color: Color, radius: float, life := 1.0) -> void
 	tm.outer_radius = 1.0
 	tm.rings = 48
 	tm.ring_segments = 4
-	var f := _spawn(Vector3(pos.x, 0.15, pos.z), tm, color, 0.2, life, radius / 0.2 - 1.0)
+	var gy: float = G.map.height_at(pos) if G.map else 0.0
+	var f := _spawn(Vector3(pos.x, gy + 0.15, pos.z), tm, color, 0.2, life, radius / 0.2 - 1.0)
 	if f:
 		f.flat = true
 
@@ -164,7 +165,7 @@ static func marker(pos: Vector3, color: Color) -> void:
 	tm.inner_radius = 0.8
 	tm.outer_radius = 1.0
 	tm.ring_segments = 4
-	_spawn(Vector3(pos.x, 0.05, pos.z), tm, color, 0.6, 0.35, -0.6)
+	_spawn(Vector3(pos.x, pos.y + 0.05, pos.z), tm, color, 0.6, 0.35, -0.6)
 
 
 func _process(delta: float) -> void:

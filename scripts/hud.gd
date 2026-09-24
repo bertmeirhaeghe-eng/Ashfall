@@ -244,7 +244,8 @@ RMB  move / attack / capture (Engineer) / board transport / rally
 Ctrl+RMB  force attack  •  A+LMB  attack-move  •  S stop  •  D deploy / unload
 Ctrl+1..9  group  •  1..9  recall (tap twice to jump)
 Arrows / screen edge / MMB drag  pan  •  Wheel  zoom  •  Q/E  rotate
-H  home base  •  Space  last alert  •  O  objectives  •  P  pause  •  Esc  menu"""
+H  home base  •  Space  last alert  •  O  objectives  •  P  pause  •  Esc  menu
+M  mute music  •  N  next track"""
 	help_panel.add_child(l)
 
 
@@ -755,6 +756,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			obj_panel.visible = not obj_panel.visible
 		elif event.keycode == KEY_F10:
 			toggle_menu()
+		elif event.keycode == KEY_M:
+			Music.toggle_mute()
+		elif event.keycode == KEY_N:
+			Music.skip()
 		elif event.keycode == KEY_ESCAPE and menu_panel.visible:
 			toggle_menu()
 			get_viewport().set_input_as_handled()

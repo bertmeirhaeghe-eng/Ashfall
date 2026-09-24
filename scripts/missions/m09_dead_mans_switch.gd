@@ -225,7 +225,7 @@ func _lance_target() -> Vector3:
 	for a in mine:
 		var n := 0.0
 		for b in mine:
-			if a.position.distance_to(b.position) <= 4.0:
+			if G.flat_dist(a.position, b.position) <= 4.0:
 				n += 2.0 if b is Structure else 1.0
 				if b.def_id == "construction_yard":
 					n += 2.0

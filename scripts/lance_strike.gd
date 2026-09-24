@@ -21,7 +21,7 @@ static func fire(pos: Vector3, p_delay := 3.0, p_radius := 3.0, p_damage := 1800
 	s.radius = p_radius
 	s.damage = p_damage
 	G.fx_root.add_child(s)
-	s.position = Vector3(pos.x, 0.0, pos.z)
+	s.position = Vector3(pos.x, G.map.height_at(pos), pos.z)
 	return s
 
 
