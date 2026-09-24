@@ -40,7 +40,7 @@ func right() -> Vector3:
 
 
 func focus_on(p: Vector3) -> void:
-	position = Vector3(p.x, 0.0, p.z)
+	position = Vector3(p.x, G.map.height_at(p) if G.map else 0.0, p.z)
 	_clamp()
 
 
@@ -94,6 +94,8 @@ func _process(delta: float) -> void:
 		# real delta even while paused
 		position += (right() * dir.x - forward() * dir.y) * PAN_SPEED * zoom * delta
 		_clamp()
+	if G.map:
+		position.y = lerpf(position.y, G.map.height_at(position), minf(1.0, delta * 4.0))
 	zoom = lerpf(zoom, target_zoom, minf(1.0, delta * 10.0))
 	yaw = lerp_angle(yaw, target_yaw, minf(1.0, delta * 8.0))
 	_update_boom()
@@ -111,11 +113,16 @@ func _update_boom() -> void:
 	cam.rotation = Vector3(-p, 0.0, 0.0)
 
 
-## Mouse position -> point on the ground plane (y = 0).
+## Mouse position -> point on the terrain.
 func screen_to_ground(screen_pos: Vector2) -> Vector3:
 	var o := cam.project_ray_origin(screen_pos)
 	var n := cam.project_ray_normal(screen_pos)
 	if absf(n.y) < 0.0001:
 		return Vector3(o.x, 0, o.z)
-	var t := -o.y / n.y
-	return o + n * t
+	# march down to the plane, then refine against the terrain height
+	var p := o + n * (-o.y / n.y)
+	if G.map:
+		for i in 5:
+			var gh: float = G.map.height_at(p)
+			p = o + n * ((gh - o.y) / n.y)
+	return p

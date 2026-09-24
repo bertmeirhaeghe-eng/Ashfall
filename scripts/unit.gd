@@ -97,7 +97,7 @@ func follow_path(delta: float) -> bool:
 	var dist := to.length()
 	var step := speed * delta
 	if dist <= step:
-		position = Vector3(wp.x, 0.0, wp.z)
+		position = wp
 		path_i += 1
 	else:
 		var np := position + to / dist * step
@@ -154,6 +154,10 @@ func _chase(t: Entity, delta: float) -> void:
 
 # ---------------------------------------------------------------- per-frame
 
+func _process(_delta: float) -> void:
+	position.y = G.map.height_at(position)  # ride the terrain
+
+
 func _physics_process(delta: float) -> void:
 	if not alive:
 		return
@@ -175,7 +179,7 @@ func _physics_process(delta: float) -> void:
 	_last_pos = position
 
 
-func _target_ok(t: Entity) -> bool:
+func _target_ok(t) -> bool:  # untyped: t may already be freed
 	return is_instance_valid(t) and t.alive
 
 
@@ -274,5 +278,6 @@ func _animate(delta: float) -> void:
 	elif model.has_meta("walker"):
 		model.position.y = absf(sin(_anim_t * 6.0)) * 0.06
 		var legs: Array = model.get_meta("legs", [])
+		var swing := float(model.get_meta("leg_swing", 0.4))
 		for i in legs.size():
-			legs[i].rotation.x = sin(_anim_t * 6.0 + PI * i) * 0.4
+			legs[i].rotation.x = sin(_anim_t * 6.0 + PI * i) * swing
