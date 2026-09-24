@@ -1,8 +1,8 @@
 # Ashfall: Milestone 1 prototype (Godot 4.7)
 
 This is the pre-production prototype from the design doc: **harvest, build and fight on one map**.
-You play the Bastion Coalition against a Veil AI. Everything is built in code from primitive meshes,
-so there are no assets to import.
+You play the Bastion Coalition against a Veil AI. The world is built in code; unit and building
+models are small `.amdl` files in `models/`, loaded at runtime, so there is nothing to import.
 
 ## Run it
 1. Open Godot 4.7 (4.3 or newer should also work) and choose **Import**, then select `project.godot`.
@@ -57,19 +57,52 @@ scripts/player_state.gd credits, power, production queues
 scripts/ai_controller.gd skirmish AI
 scripts/input_controller.gd selection and orders;  rts_camera.gd  camera
 scripts/hud.gd, overlay.gd, minimap.gd  UI
-scripts/mesh_factory.gd placeholder models (swap for real art using the same metadata contract)
+scripts/mesh_factory.gd loads models/*.amdl, maps material slots to faction palette / team colour
+models/*.amdl          generated models (see "Art" below)
+tools/models/          model pipeline: STL sources, procedural models, preview renderer
 scripts/fx.gd, projectile.gd  effects
 ```
 **Tweaking balance:** edit `data/rules.json`. To add a unit, add an entry that references a `model`
-key from `mesh_factory.gd`. It shows up in the sidebar automatically.
+key (a file in `models/`). It shows up in the sidebar automatically.
 
-**Exporting:** add `*.json` to *Export → Resources → Filters to export non-resource files*,
-otherwise `rules.json` is left out of the build.
+**Exporting:** the presets already export `*.json` and `*.amdl` as non-resource files. If you make a
+new preset, add both to *Export → Resources → Filters to export non-resource files*.
+
+## Art (Tiberian Sun look)
+Models are flat-shaded and faceted like TS voxels, with baked ambient occlusion, a weathered grime
+texture, glowing lights and team-colour panels that recolour per player (like TS palette remaps).
+Bastion uses GDI khaki-grey with gold trim; the Veil uses Nod gunmetal black with red.
+
+| Model | Source |
+|---|---|
+| Harvester | `CC2_harvester.STL` (TS GDI harvester), with glowing cargo windows that fill as it harvests |
+| Warden Walker | `SK_VH_Titan_Reborn.stl` (GDI Titan), split into legs and a rotating upper body |
+| Pathfinder Mech | `SK_VH_Wolverine_Reborn.stl` (GDI Wolverine), split into legs and a rotating upper body |
+| Rifleman, Rocket Trooper | procedural: GDI helmeted infantry, or Nod hooded gas-mask troops for the Veil |
+| Raider Buggy, Scorpion Tank | procedural: Nod attack buggy, Nod tick-tank-style light tank |
+| Buildings | procedural, one GDI-style and one Nod-style (`*_veil`) version each. The Veil barracks is a Hand of Nod-style temple |
+| Terrain props | procedural tiberium crystal clusters, faceted boulders, blossom tree |
+
+**Terrain and mood** (`scripts/map_grid.gd`, `shaders/`, `main.gd`): a heightmap with rolling hills, flattened
+base plateaus and rock cells that rise into streaked cliffs. `terrain.gdshader` paints ochre dirt, dark scrub
+patches, dust flats with cracks, cliff rock and tiberium-stained soil. `tiberium.gdshader` gives the crystals
+glowing tips, a fresnel rim and a slow pulse. Lighting is a low amber dusk sun with a cold fill, dusty haze,
+filmic grading, drifting ash and embers, and a vignette.
+
+Rebuild after editing `tools/models/procedural.py` or `build_models.py`:
+```
+pip install -r tools/models/requirements.txt
+python3 tools/models/build_models.py              # or: ... build_models.py walker tank
+xvfb-run godot --rendering-driver opengl3 --path . --script tools/models/preview.gd -- sheet.png
+```
+To add a model, write a function in `procedural.py` (or an STL import in `build_models.py`) and
+reference its name as `model` in `rules.json`. A `<model>_veil` version is picked automatically for
+the Veil. Material slots are `body panel dark metal team glow glass lamp red tib concrete hazard`.
 
 ## Known limits (deliberately deferred)
 - No fog of war or shroud, and no air or naval units yet.
-- Flat terrain. High-ground bonuses come later.
+- Height is visual only: units follow hills and cliffs block movement, but there are no high-ground bonuses yet.
 - The simulation isn't deterministic yet, so there's no multiplayer. It needs a fixed-point lockstep layer.
 - Units only push each other apart (they don't use RVO avoidance). Large blobs can jostle in chokepoints.
 - Music only -- no sound effects yet.
-- Placeholder art: every model is built from primitive meshes.
+- Units have simple procedural animation only (leg swing, turret aim, bobbing); no skeletal rigs.

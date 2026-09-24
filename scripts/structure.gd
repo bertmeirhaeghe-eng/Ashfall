@@ -22,7 +22,18 @@ func setup_at(id: String, p_team: int, top_left: Vector2i) -> void:
 	setup(id, p_team)
 	power = int(def.get("power", 0))
 	produces = def.get("produces", [])
-	position = Vector3(cell.x + size.x * 0.5, 0.0, cell.y + size.y * 0.5)
+	# sit level at the highest corner; a foundation fills the gap on slopes
+	var hl: Vector2 = G.map.footprint_height(cell, size)
+	position = Vector3(cell.x + size.x * 0.5, hl.y, cell.y + size.y * 0.5)
+	var drop := hl.y - hl.x
+	if drop > 0.01:
+		var f := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		bm.size = Vector3(size.x - 0.06, drop + 0.12, size.y - 0.06)
+		f.mesh = bm
+		f.position.y = -drop * 0.5 - 0.04
+		f.material_override = MeshFactory.mat(MeshFactory.palette(G.players[team].faction)["concrete"].darkened(0.2), 0.0, 0.9, 0.1)
+		model.add_child(f)
 	radius = maxf(size.x, size.y) * 0.5
 
 
