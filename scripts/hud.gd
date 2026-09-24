@@ -230,6 +230,7 @@ A + LMB  attack-move   •   S  stop   •   Esc  cancel / deselect
 Ctrl+1..9  group   •   1..9  recall (tap twice to jump)
 Arrows / screen edge / MMB drag  pan   •   Wheel  zoom   •   Q/E  rotate
 H  home base   •   Space  last alert   •   P  pause
+M  mute music   •   N  next track
 Sidebar: LMB queue / place  •  RMB cancel (refund)"""
 	help_panel.add_child(l)
 
@@ -501,3 +502,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			pause_label.visible = get_tree().paused
 		elif event.keycode == KEY_F1:
 			help_panel.visible = not help_panel.visible
+		elif event.keycode == KEY_M:
+			Music.toggle_mute()
+		elif event.keycode == KEY_N:
+			Music.skip()

@@ -34,12 +34,21 @@ fields (the flank fields have a blossom tree), and a contested blue field in the
 | Ctrl+1..9 / 1..9 | Set / recall a group (tap twice to jump the camera) |
 | H / Space | Jump to home base / to the last alert |
 | P / F1 / Esc | Pause / toggle help / cancel mode or deselect |
+| M / N | Mute music / skip to next track |
 | Sidebar LMB / RMB | Queue or place / cancel with a refund |
+
+## Music
+`music/` holds the game's soundtrack. `scripts/music.gd` (autoload "Music") scans that folder on
+startup and shuffles through every `.mp3`, `.ogg` and `.wav` file it finds, looping forever. **To
+add a track, just drop the audio file into `music/`** -- nothing else to wire up. Press `M` in-game
+to mute/unmute and `N` to skip to the next track.
 
 ## Project layout
 ```
 data/rules.json        all balance data (units, weapons, warheads, crystal, economy)
+music/                  soundtrack -- drop .mp3/.ogg/.wav files here to add more
 scripts/g.gd           autoload "G": rules, players, entity registry, spawning, placement
+scripts/music.gd       autoload "Music": scans music/ and shuffle-plays the soundtrack
 scripts/map_grid.gd    map generation, AStarGrid2D pathing, crystal growth, ground and crystal visuals
 scripts/entity.gd      shared health, armor, weapon and veterancy
 scripts/unit.gd        movement and orders;  harvester.gd  harvest state machine
@@ -62,5 +71,5 @@ otherwise `rules.json` is left out of the build.
 - Flat terrain. High-ground bonuses come later.
 - The simulation isn't deterministic yet, so there's no multiplayer. It needs a fixed-point lockstep layer.
 - Units only push each other apart (they don't use RVO avoidance). Large blobs can jostle in chokepoints.
-- No audio yet.
+- Music only -- no sound effects yet.
 - Placeholder art: every model is built from primitive meshes.

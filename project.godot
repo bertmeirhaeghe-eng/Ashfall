@@ -13,6 +13,7 @@ config/features=PackedStringArray("4.7", "Forward Plus")
 [autoload]
 
 G="*res://scripts/g.gd"
+Music="*res://scripts/music.gd"
 
 [display]
 
