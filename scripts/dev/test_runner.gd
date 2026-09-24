@@ -38,6 +38,8 @@ func begin(p_name: String) -> void:
 	elif p_name == "smoke":
 		Campaign.mission_index = 1
 		Campaign.start_mission()
+	elif p_name == "voice":
+		_voice_test.call_deferred()
 	else:
 		_fail("unknown test " + p_name)
 
@@ -129,6 +131,43 @@ func _shot_menu(spec: String) -> void:
 	await get_tree().create_timer(2.5).timeout
 	await _save_shot(what)
 	get_tree().quit(0)
+
+
+## Speaks one line per character through the active voice backend (run with
+## ASHFALL_VOICE=kokoro) and saves the rendered Kokoro audio for inspection.
+func _voice_test() -> void:
+	print("TEST voice backend: ", Voice.backend_name())
+	if Voice.backend != Voice.Backend.KOKORO:
+		_fail("Kokoro backend not active")
+		return
+	var lines := [["okafor", "Commander, welcome to the Rhine."], ["havel", "Bad news first."],
+		["rourke", "I don't waste loans."], ["sibyl", "Every machine you own already listens to me."],
+		["tallow", "Don't wake the Maw."], ["kestrel", "Let's not waste each other's time."],
+		["lindqvist", "I think the Seed is not a rock."], ["narrator", "In 2031, the night sky filled with green fire."]]
+	var t0 := Time.get_ticks_msec()
+	var started := {}
+	Voice.line_started.connect(func(spk, _n, _t, _c): started[spk] = (Time.get_ticks_msec() - t0) / 1000.0)
+	for l in lines:
+		Voice.say(l[0], l[1])
+	while Voice.busy() and Time.get_ticks_msec() - t0 < 180000:
+		await get_tree().process_frame
+	var total := (Time.get_ticks_msec() - t0) / 1000.0
+	var dir := OS.get_environment("ASHFALL_SHOT_DIR")
+	for l in lines:
+		var item: Dictionary = Voice._make_item(l[0], l[1], Voice.Prio.DIALOG, "spk_" + l[0], Voice.SPEAKERS[l[0]], true)
+		var wav: AudioStreamWAV = Voice._cached(item["key"])
+		if wav == null:
+			_fail("no audio rendered for " + l[0])
+			return
+		var secs := wav.get_length()
+		print("TEST voice %-10s voice #%d  %.2fs audio, started at %.2fs" % [l[0], item["sid"], secs, started.get(l[0], -1.0)])
+		if dir != "":
+			wav.save_to_wav(dir.path_join("voice_%s.wav" % l[0]))
+	print("TEST voice all lines finished in %.1fs" % total)
+	# a unit reaction twice: the second one must come straight from the cache
+	Voice.unit_ack("infantry", "select")
+	await get_tree().create_timer(3.0).timeout
+	_pass("voice")
 
 
 func _wait_time(m: Mission, secs: float) -> void:

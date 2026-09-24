@@ -14,21 +14,34 @@ soundtrack round it out.
 every mission (`user://ashfall_campaign.json`), so **Continue Game** returns you to the briefing of the
 mission you reached, with every story choice you have made so far.
 
-## Voices (text-to-speech)
-Every voice in the game is spoken by the platform text-to-speech engine through Godot's
-`DisplayServer.tts_*` API (`scripts/voice.gd`):
-- **Briefings, the prologue and the epilogue**: each character (Okafor, Havel, Lindqvist, Rourke,
-  Oriel, Kestrel, SIBYL, Tallow, the narrator) has a voice profile: a male/female voice pick where
-  the system has one, plus its own pitch and speaking rate.
+## Voices (Kokoro TTS)
+Every voice in the game is synthesised at runtime by **[Kokoro TTS](https://huggingface.co/hexgrad/Kokoro-82M)**
+through the **[godot-kokoro](https://github.com/PhilNikitin/godot-kokoro)** GDExtension
+(`addons/godot_kokoro`, Windows, macOS and Linux binaries included) (`scripts/voice.gd`):
+- **Briefings, the prologue and the epilogue**: each character has their own Kokoro voice
+  (Okafor `af_kore`, Havel `am_liam`, Lindqvist `bm_fable`, Rourke `am_onyx`, Oriel `af_heart`,
+  Kestrel `bf_alice`, SIBYL `af_sky` through a reverb/chorus "choir", Tallow `am_fenrir`, the narrator
+  `bm_george`...) with its own speed and a light pitch colour.
 - **Mission dialogue**: radio chatter triggered by events, with subtitles on screen.
 - **Bastion EVA**: "Construction complete", "Unit ready", "Our base is under attack", "Low power"...
 - **Unit reactions** (C&C style): selecting a unit, ordering it to move or to attack makes it answer
   ("Reporting.", "Moving out.", "Engaging!"). Each unit type has its own lines and voice.
 
-Dialogue has priority over EVA, and EVA over unit chatter, so important lines are never cut off.
-Windows (SAPI) and macOS work out of the box. On Linux, install **speech-dispatcher**
-(`sudo apt install speech-dispatcher`). Without a TTS engine the game still runs: lines are shown as
-subtitles and paced as if spoken.
+Lines are rendered one at a time in the order they will be spoken (dialogue first), then cached in
+`user://voice_cache/`, so each line is only synthesised once. Unit reactions and EVA lines are
+pre-rendered in the background on the first run so clicks answer instantly. Dialogue has priority
+over EVA, and EVA over unit chatter.
+
+**Install the voice model once** (~132 MB, not in git):
+```
+powershell -ExecutionPolicy Bypass -File tools\get_kokoro_model.ps1     # Windows
+bash tools/get_kokoro_model.sh                                          # Linux / macOS
+```
+It downloads `kokoro-int8-multi-lang-v1_0` from the sherpa-onnx releases into
+`addons/godot_kokoro/models/`. For exported builds, copy that folder's contents to a `kokoro_models/`
+folder next to the game executable. Without the model the game falls back to the system
+text-to-speech engine, then to subtitles only; the main menu shows which one is active.
+For testing, `ASHFALL_VOICE=kokoro|system|none` forces a backend.
 
 ## Music
 Every track in `music/` plays in shuffled order and loops (`scripts/music.gd`). Drop more
@@ -77,7 +90,9 @@ scenes/menu.tscn             main menu (entry point)
 scenes/story.tscn            prologue / briefing / epilogue screen
 scenes/main.tscn             the game; loads the current mission
 scripts/campaign.gd          autoload "Campaign": mission list, briefings, unlocks, save file, flags
-scripts/voice.gd             autoload "Voice": text-to-speech, speaker profiles, unit reactions, EVA
+scripts/voice.gd             autoload "Voice": Kokoro / system TTS, speaker profiles, unit reactions, EVA
+addons/godot_kokoro/         godot-kokoro GDExtension (Kokoro TTS via Sherpa-ONNX); models/ is downloaded
+tools/get_kokoro_model.*     downloads the Kokoro voice model
 scripts/g.gd                 autoload "G": rules, teams, entities, spawning, placement, detection
 scripts/missions/mission.gd  mission base class: objectives, triggers, dialogue, win/lose
 scripts/missions/m01..m10    the ten missions (+ glass_storm.gd, train_car.gd)
@@ -99,6 +114,7 @@ godot --headless --path . --fixed-fps 30 --quit-after 250000 -- --test=campaign 
 godot --headless --path . --fixed-fps 30 --quit-after 120000 -- --test=smoke      # each mission runs 150 s unattended
 godot --headless --path . --fixed-fps 30 --quit-after 30000  -- --test=m6         # one mission's scripted solution
 godot --path . -- --mission=4                                                     # jump straight into a mission
+ASHFALL_VOICE=kokoro godot --headless --path . -- --test=voice                     # render a line per character with Kokoro
 ```
 The scripted solutions take shortcuts (teleporting units, removing targets) but every objective is
 still completed through the mission's own triggers. Test runs never touch your save file.

@@ -61,14 +61,21 @@ func _ready() -> void:
 	else:
 		continue_btn.disabled = true
 		info.text = "No campaign in progress"
-	if not Voice.enabled:
-		var warn := Label.new()
-		warn.text = "Text-to-speech is unavailable on this system: voices are shown as subtitles."
-		warn.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		warn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		warn.add_theme_font_size_override("font_size", 12)
-		warn.add_theme_color_override("font_color", Color(1.0, 0.7, 0.4))
-		vb.add_child(warn)
+	var vl := Label.new()
+	vl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	vl.add_theme_font_size_override("font_size", 12)
+	match Voice.backend:
+		Voice.Backend.KOKORO:
+			vl.text = "Voices: Kokoro TTS"
+			vl.add_theme_color_override("font_color", Color(0.6, 0.85, 0.65))
+		Voice.Backend.SYSTEM:
+			vl.text = "Voices: system text-to-speech. Install the Kokoro model for neural voices (see README)."
+			vl.add_theme_color_override("font_color", Color(0.8, 0.8, 0.7))
+		_:
+			vl.text = "No text-to-speech available: voices are shown as subtitles. Install the Kokoro model (see README)."
+			vl.add_theme_color_override("font_color", Color(1.0, 0.7, 0.4))
+	vb.add_child(vl)
 	new_btn.grab_focus()
 	Voice.stop_all()
 	Voice.say("eva", "Welcome back, Commander.")
