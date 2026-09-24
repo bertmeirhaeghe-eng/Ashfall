@@ -1,0 +1,60 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  GODOT_VERSION: "4.7"
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Godot and export templates
+        run: |
+          base="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
+          curl -fsSL -o godot.zip "$base/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          curl -fsSL -o templates.tpz "$base/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          unzip -q godot.zip
+          sudo mv "Godot_v${GODOT_VERSION}-stable_linux.x86_64" /usr/local/bin/godot
+          dest="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          mkdir -p "$dest"
+          unzip -q templates.tpz
+          mv templates/* "$dest/"
+          godot --version
+
+      - name: Import project
+        run: godot --headless --import || true
+
+      - name: Smoke test (run the game headless and fail on script errors)
+        run: |
+          godot --headless --path . --quit-after 600 2>&1 | tee run.log
+          if grep -E "SCRIPT ERROR|Parse Error|Failed to load script|Compile Error" run.log; then
+            echo "::error::Script errors found while running the game"
+            exit 1
+          fi
+
+      - name: Export Linux
+        run: |
+          mkdir -p build/linux
+          godot --headless --export-release "Linux" build/linux/Ashfall.x86_64
+
+      - name: Export Windows
+        run: |
+          mkdir -p build/windows
+          godot --headless --export-release "Windows" build/windows/Ashfall.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Ashfall-linux
+          path: build/linux/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Ashfall-windows
+          path: build/windows/
