@@ -22,6 +22,8 @@ var rng := RandomNumberGenerator.new()
 
 var ground_img: Image
 var ground_tex: ImageTexture
+var radar_img: Image                # minimap: shaded relief, rock and crystal
+var radar_tex: ImageTexture
 var _noise := FastNoiseLite.new()
 var _mm_green: MultiMeshInstance3D
 var _mm_blue: MultiMeshInstance3D
@@ -51,7 +53,9 @@ func is_walkable(c: Vector2i) -> bool:
 
 
 func cell_to_world(c: Vector2i) -> Vector3:
-	return Vector3(c.x + 0.5, 0.0, c.y + 0.5)
+	var p := Vector3(c.x + 0.5, 0.0, c.y + 0.5)
+	p.y = height_at(p)
+	return p
 
 
 func world_to_cell(p: Vector3) -> Vector2i:
@@ -470,34 +474,13 @@ func _blossom_seed() -> void:
 # ================================================================ visuals
 
 func _build_visuals() -> void:
-	# Ground: a single quad with an explicit UV mapping to the per-cell colour image.
-	ground_img = Image.create_empty(w, h, false, Image.FORMAT_RGB8)
+	_build_heights()
+	# per-cell stains (tiberium-poisoned soil), sampled by the terrain shader
+	ground_img = Image.create_empty(w, h, false, Image.FORMAT_RGBA8)
 	_paint_ground()
 	ground_tex = ImageTexture.create_from_image(ground_img)
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var corners := [Vector3(0, 0, 0), Vector3(w, 0, 0), Vector3(w, 0, h), Vector3(0, 0, h)]
-	var uvs := [Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)]
-	for k in [0, 1, 2, 0, 2, 3]:
-		st.set_normal(Vector3.UP)
-		st.set_uv(uvs[k])
-		st.set_uv2(Vector2(corners[k].x, corners[k].z) / 9.0)
-		st.add_vertex(corners[k])
-	var ground := MeshInstance3D.new()
-	ground.name = "Ground"
-	ground.mesh = st.commit()
-	var gm := StandardMaterial3D.new()
-	gm.albedo_texture = ground_tex
-	gm.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR
-	gm.roughness = 0.95
-	gm.cull_mode = BaseMaterial3D.CULL_DISABLED
-	# tiling dirt / scrub-grass detail on top of the per-cell colours (TS temperate look)
-	gm.detail_enabled = true
-	gm.detail_albedo = _ground_detail()
-	gm.detail_blend_mode = BaseMaterial3D.BLEND_MODE_MUL
-	gm.detail_uv_layer = BaseMaterial3D.DETAIL_UV_2
-	ground.material_override = gm
-	add_child(ground)
+	radar_tex = ImageTexture.create_from_image(radar_img)
+	_build_ground_mesh()
 
 	# Out-of-bounds skirt so the map edge doesn't float in the sky.
 	var skirt := MeshInstance3D.new()
@@ -506,7 +489,7 @@ func _build_visuals() -> void:
 	skirt.mesh = pm
 	skirt.position = Vector3(w * 0.5, -0.05, h * 0.5)
 	var sm := StandardMaterial3D.new()
-	sm.albedo_color = Color(0.09, 0.08, 0.07)
+	sm.albedo_color = Color(0.1, 0.07, 0.05)
 	sm.roughness = 1.0
 	skirt.material_override = sm
 	add_child(skirt)
@@ -515,45 +498,214 @@ func _build_visuals() -> void:
 	_build_trees()
 
 	var shard := MeshFactory.mesh("tiberium")
-	_mm_green = _make_crystal_mmi(shard, Color(0.15, 0.9, 0.25), Color(0.1, 0.5, 0.15))
-	_mm_blue = _make_crystal_mmi(shard, Color(0.2, 0.5, 1.0), Color(0.1, 0.25, 0.6))
+	_mm_green = _make_crystal_mmi(shard, Color(0.1, 0.6, 0.16), Color(0.25, 1.0, 0.3))
+	_mm_blue = _make_crystal_mmi(shard, Color(0.12, 0.3, 0.7), Color(0.3, 0.6, 1.0))
 	_rebuild_crystal_meshes()
 
 
-func _ground_detail() -> Texture2D:
-	var size := 256
-	var patches := FastNoiseLite.new()
-	patches.seed = 4
-	patches.frequency = 0.012
-	patches.fractal_octaves = 4
-	var grain := FastNoiseLite.new()
-	grain.seed = 9
-	grain.noise_type = FastNoiseLite.TYPE_CELLULAR
-	grain.frequency = 0.09
-	var pi := patches.get_seamless_image(size, size)
-	var gi := grain.get_seamless_image(size, size)
-	var img := Image.create_empty(size, size, false, Image.FORMAT_RGB8)
-	var dirt := Color(1.0, 0.95, 0.86)
-	var grass := Color(0.82, 0.9, 0.68)
-	for y in size:
-		for x in size:
-			var p := smoothstep(0.35, 0.75, pi.get_pixel(x, y).r)
-			var g := gi.get_pixel(x, y).r
-			var c := dirt.lerp(grass, p) * (0.86 + 0.14 * g)
-			img.set_pixel(x, y, c)
-	img.generate_mipmaps()
-	return ImageTexture.create_from_image(img)
+# ---------------------------------------------------------------- heights
+# The height field has two vertices per cell edge (corners, edge midpoints and
+# cell centres), so rock cells can rise into cliffs while every vertex that
+# touches a walkable cell stays on the smooth, walkable ground.
+
+const HR := 2                        # height samples per cell
+var hmap := PackedFloat32Array()     # (w*HR+1) x (h*HR+1)
+var cliff := PackedFloat32Array()    # 0..1 how much of the height is raised rock
+var _hw := 0
 
 
-func _make_crystal_mmi(mesh: Mesh, glow: Color, base: Color) -> MultiMeshInstance3D:
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = base
-	mat.metallic = 0.3
-	mat.roughness = 0.15
-	mat.emission_enabled = true
-	mat.emission = glow
-	mat.emission_energy_multiplier = 0.7
-	mat.vertex_color_use_as_albedo = true
+func height_at(p: Vector3) -> float:
+	if hmap.is_empty():
+		return 0.0
+	var fx := clampf(p.x * HR, 0.0, w * HR - 0.001)
+	var fz := clampf(p.z * HR, 0.0, h * HR - 0.001)
+	var x0 := int(fx)
+	var z0 := int(fz)
+	var tx := fx - x0
+	var tz := fz - z0
+	var i := z0 * _hw + x0
+	var a := lerpf(hmap[i], hmap[i + 1], tx)
+	var b := lerpf(hmap[i + _hw], hmap[i + _hw + 1], tx)
+	return lerpf(a, b, tz)
+
+
+## Highest ground under a footprint (buildings sit level on a foundation).
+func footprint_height(top_left: Vector2i, size: Vector2i) -> Vector2:
+	var lo := INF
+	var hi := -INF
+	for z in range(top_left.y * HR, (top_left.y + size.y) * HR + 1):
+		for x in range(top_left.x * HR, (top_left.x + size.x) * HR + 1):
+			if x < 0 or z < 0 or x >= _hw or z > h * HR:
+				continue
+			var v := hmap[z * _hw + x]
+			lo = minf(lo, v)
+			hi = maxf(hi, v)
+	if lo == INF:
+		return Vector2.ZERO
+	return Vector2(lo, hi)
+
+
+func _ground_height(x: float, z: float, hills: FastNoiseLite) -> float:
+	# rolling hills, mirrored so both sides get the same terrain
+	var mx := w - x
+	var mz := h - z
+	var n := (hills.get_noise_2d(x, z) + hills.get_noise_2d(mx, mz)) * 0.5
+	var v := (n * 0.5 + 0.5) * 2.2
+	# flatten the base plateaus
+	for b in base_cells:
+		var bc := Vector2(b.x + 0.5, b.y + 0.5)
+		var bh := ((hills.get_noise_2d(bc.x, bc.y) + hills.get_noise_2d(w - bc.x, h - bc.y)) * 0.25 + 0.5) * 2.2
+		var t := smoothstep(8.0, 13.0, Vector2(x, z).distance_to(bc))
+		v = lerpf(bh, v, t)
+	return v
+
+
+func _build_heights() -> void:
+	var hills := FastNoiseLite.new()
+	hills.seed = _noise.seed + 17
+	hills.frequency = 0.035
+	hills.fractal_octaves = 3
+	var jag := FastNoiseLite.new()
+	jag.seed = _noise.seed + 5
+	jag.frequency = 0.35
+	# distance of every rock cell to open ground (cliff tiers)
+	var depth := PackedInt32Array()
+	depth.resize(w * h)
+	var frontier: Array = []
+	for y in h:
+		for x in w:
+			var i := y * w + x
+			depth[i] = 0 if terrain[i] != Terrain.ROCK else 999
+			if depth[i] == 0:
+				frontier.append(Vector2i(x, y))
+	while not frontier.is_empty():
+		var nxt: Array = []
+		for c in frontier:
+			var d := depth[idx(c)] + 1
+			for o in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+				var n: Vector2i = c + o
+				if in_bounds(n) and depth[idx(n)] > d:
+					depth[idx(n)] = d
+					nxt.append(n)
+		frontier = nxt
+	_hw = w * HR + 1
+	var hh := h * HR + 1
+	hmap.resize(_hw * hh)
+	cliff.resize(_hw * hh)
+	for vz in hh:
+		for vx in _hw:
+			var x := float(vx) / HR
+			var z := float(vz) / HR
+			var base := _ground_height(x, z, hills)
+			# cells this vertex touches: all must be rock to raise it
+			var min_d := 999
+			var cx0 := floori(x - 0.01) if vx % HR == 0 else floori(x)
+			var cx1 := floori(x) if vx % HR == 0 else floori(x)
+			var cz0 := floori(z - 0.01) if vz % HR == 0 else floori(z)
+			var cz1 := floori(z) if vz % HR == 0 else floori(z)
+			for cz in range(cz0, cz1 + 1):
+				for cx in range(cx0, cx1 + 1):
+					var c := Vector2i(cx, cz)
+					var d := 3 if not in_bounds(c) else depth[idx(c)]
+					min_d = mini(min_d, d)
+			var rise := 0.0
+			if min_d >= 1:
+				var j := jag.get_noise_2d(x, z) + jag.get_noise_2d(w - x, h - z)
+				rise = 1.5 + 0.45 * minf(min_d - 1, 2) + j * 0.35
+				if vx % HR == 1 and vz % HR == 1:
+					rise += 0.2  # cell centres poke up: jagged crests
+			var i := vz * _hw + vx
+			hmap[i] = base + maxf(rise, 0.0)
+			cliff[i] = clampf(rise / 1.5, 0.0, 1.0)
+
+
+func _build_ground_mesh() -> void:
+	var hh := h * HR + 1
+	var verts := PackedVector3Array()
+	var norms := PackedVector3Array()
+	var cols := PackedColorArray()
+	var uvs := PackedVector2Array()
+	verts.resize(_hw * hh)
+	norms.resize(_hw * hh)
+	cols.resize(_hw * hh)
+	uvs.resize(_hw * hh)
+	var step := 1.0 / HR
+	for vz in hh:
+		for vx in _hw:
+			var i := vz * _hw + vx
+			var hc := hmap[i]
+			var hl := hmap[vz * _hw + maxi(vx - 1, 0)]
+			var hr := hmap[vz * _hw + mini(vx + 1, _hw - 1)]
+			var hu := hmap[maxi(vz - 1, 0) * _hw + vx]
+			var hd := hmap[mini(vz + 1, hh - 1) * _hw + vx]
+			verts[i] = Vector3(vx * step, hc, vz * step)
+			norms[i] = Vector3(hl - hr, 2.0 * step, hu - hd).normalized()
+			# occlusion: darker in hollows and at the foot of cliffs
+			var cavity := clampf(((hl + hr + hu + hd) * 0.25 - hc) * 1.6, 0.0, 0.6)
+			cols[i] = Color(cliff[i], 1.0 - cavity, 0.0)
+			uvs[i] = Vector2(vx * step / w, vz * step / h)
+	var idxs := PackedInt32Array()
+	idxs.resize((_hw - 1) * (hh - 1) * 6)
+	var k := 0
+	for vz in hh - 1:
+		for vx in _hw - 1:
+			var a := vz * _hw + vx
+			var b := a + 1
+			var c := a + _hw
+			var d := c + 1
+			# split each quad along its flatter diagonal
+			if absf(hmap[a] - hmap[d]) < absf(hmap[b] - hmap[c]):
+				idxs[k] = a; idxs[k + 1] = b; idxs[k + 2] = d
+				idxs[k + 3] = a; idxs[k + 4] = d; idxs[k + 5] = c
+			else:
+				idxs[k] = a; idxs[k + 1] = b; idxs[k + 2] = c
+				idxs[k + 3] = b; idxs[k + 4] = d; idxs[k + 5] = c
+			k += 6
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_NORMAL] = norms
+	arrays[Mesh.ARRAY_COLOR] = cols
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_INDEX] = idxs
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	var ground := MeshInstance3D.new()
+	ground.name = "Ground"
+	ground.mesh = mesh
+	var mat := ShaderMaterial.new()
+	mat.shader = load("res://shaders/terrain.gdshader")
+	mat.set_shader_parameter("cell_map", ground_tex)
+	mat.set_shader_parameter("map_size", Vector2(w, h))
+	mat.set_shader_parameter("patch_noise", _noise_tex(1, FastNoiseLite.TYPE_SIMPLEX_SMOOTH, 0.012, 5))
+	mat.set_shader_parameter("grain_noise", _noise_tex(2, FastNoiseLite.TYPE_SIMPLEX, 0.05, 4))
+	var crack := _noise_tex(3, FastNoiseLite.TYPE_CELLULAR, 0.02, 1)
+	(crack.noise as FastNoiseLite).cellular_return_type = FastNoiseLite.RETURN_DISTANCE2_SUB
+	mat.set_shader_parameter("crack_noise", crack)
+	ground.material_override = mat
+	add_child(ground)
+
+
+func _noise_tex(seed_value: int, kind: int, freq: float, octaves: int) -> NoiseTexture2D:
+	var n := FastNoiseLite.new()
+	n.seed = seed_value
+	n.noise_type = kind
+	n.frequency = freq
+	n.fractal_octaves = octaves
+	var t := NoiseTexture2D.new()
+	t.width = 512
+	t.height = 512
+	t.seamless = true
+	t.generate_mipmaps = true
+	t.noise = n
+	return t
+
+
+func _make_crystal_mmi(mesh: Mesh, base: Color, glow: Color) -> MultiMeshInstance3D:
+	var mat := ShaderMaterial.new()
+	mat.shader = load("res://shaders/tiberium.gdshader")
+	mat.set_shader_parameter("base_color", base)
+	mat.set_shader_parameter("glow_color", glow)
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.mesh = mesh
@@ -572,18 +724,23 @@ func _rebuild_crystal_meshes() -> void:
 		var i := idx(c)
 		var amount: float = crystal[i]
 		var frac := clampf(amount / _max_for(crystal_kind[i]), 0.0, 1.0)
-		var count := 1 + int(frac * 3.0)
+		# dense beds of small clusters, a few big ones in rich cells
+		var count := 2 + int(frac * 4.0)
 		var h32 := hash(c)
 		for k in count:
 			var hk: int = hash(h32 + k * 7919)
-			var ox := float(hk % 1000) / 1000.0 * 0.7 - 0.35
-			var oz := float((hk / 1000) % 1000) / 1000.0 * 0.7 - 0.35
+			var ox := float(hk % 1000) / 1000.0 * 0.84 - 0.42
+			var oz := float((hk / 1000) % 1000) / 1000.0 * 0.84 - 0.42
 			var yaw := float((hk / 7) % 628) / 100.0
-			var tilt := float((hk / 13) % 60) / 100.0 - 0.3
-			var s := (0.45 + frac * 0.75) * (0.8 + float(hk % 7) * 0.06)
-			var bs := Basis(Vector3.UP, yaw) * Basis(Vector3.RIGHT, tilt)
-			bs = bs.scaled(Vector3(s, s * 1.2, s))
-			var t := Transform3D(bs, Vector3(c.x + 0.5 + ox, 0.0, c.y + 0.5 + oz))
+			var tilt := float((hk / 13) % 50) / 100.0 - 0.25
+			var roll := float((hk / 17) % 50) / 100.0 - 0.25
+			var big := 1.35 if k == 0 and frac > 0.6 else 1.0
+			var s := (0.28 + frac * 0.42) * (0.75 + float(hk % 7) * 0.07) * big
+			var bs := Basis(Vector3.UP, yaw) * Basis(Vector3.RIGHT, tilt) * Basis(Vector3.FORWARD, roll)
+			bs = bs.scaled(Vector3(s, s * 1.25, s))
+			var pos := Vector3(c.x + 0.5 + ox, 0.0, c.y + 0.5 + oz)
+			pos.y = height_at(pos) - 0.02
+			var t := Transform3D(bs, pos)
 			if crystal_kind[i] == Crystal.BLUE:
 				blue.append(t)
 			else:
@@ -601,43 +758,80 @@ func _fill_mm(mm: MultiMesh, xforms: Array) -> void:
 func _paint_ground() -> void:
 	if ground_img == null:
 		return
-	for x in w:
-		for y in h:
-			var i := y * w + x
-			var n := _noise.get_noise_2d(x * 1.7, y * 1.7) * 0.05
-			var col := Color(0.4 + n, 0.37 + n, 0.29 + n)
-			if terrain[i] == Terrain.ROCK:
-				col = Color(0.27 + n, 0.25 + n, 0.22 + n)
-			elif crystal[i] > 0.0:
-				var k := clampf(crystal[i] / _max_for(crystal_kind[i]), 0.2, 1.0)
-				var tint := Color(0.16, 0.32, 0.12) if crystal_kind[i] == Crystal.GREEN else Color(0.12, 0.2, 0.38)
-				col = col.lerp(tint, 0.5 + k * 0.4)
-			ground_img.set_pixel(x, y, col)
+	ground_img.fill(Color(0, 0, 0, 0))
+	for c in crystal_cells.keys():
+		var i := idx(c)
+		var k := clampf(crystal[i] / _max_for(crystal_kind[i]), 0.2, 1.0)
+		var tint := Color(0.13, 0.22, 0.08) if crystal_kind[i] == Crystal.GREEN else Color(0.1, 0.16, 0.26)
+		tint.a = 0.45 + k * 0.4
+		ground_img.set_pixel(c.x, c.y, tint)
+		# poisoned soil bleeds a little into the neighbouring cells
+		for o in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			var n: Vector2i = c + o
+			if in_bounds(n) and ground_img.get_pixel(n.x, n.y).a < 0.3:
+				var t2 := tint
+				t2.a = 0.3
+				ground_img.set_pixel(n.x, n.y, t2)
+	for b in blossoms:
+		ground_img.set_pixel(b.x, b.y, Color(0.1, 0.18, 0.06, 0.9))
 	if ground_tex:
 		ground_tex.update(ground_img)
+	_paint_radar()
+
+
+func _paint_radar() -> void:
+	if radar_img == null:
+		radar_img = Image.create_empty(w, h, false, Image.FORMAT_RGB8)
+	for y in h:
+		for x in w:
+			var i := y * w + x
+			var p := Vector3(x + 0.5, 0.0, y + 0.5)
+			var hc := height_at(p)
+			# light from the north-west
+			var shade := clampf(1.0 + (height_at(p + Vector3(-0.5, 0, -0.5)) - hc) * 0.9, 0.55, 1.3)
+			var col := Color(0.4, 0.29, 0.16) * (0.85 + hc * 0.12)
+			if terrain[i] == Terrain.ROCK:
+				col = Color(0.26, 0.22, 0.18)
+			elif crystal[i] > 0.0:
+				col = Color(0.2, 0.62, 0.2) if crystal_kind[i] == Crystal.GREEN else Color(0.25, 0.45, 0.85)
+			elif terrain[i] == Terrain.TREE:
+				col = Color(0.3, 0.8, 0.3)
+			radar_img.set_pixel(x, y, col * shade)
+	if radar_tex:
+		radar_tex.update(radar_img)
 
 
 func _build_rocks() -> void:
+	# jagged boulders and spires along the cliffs
 	var rock_mesh := MeshFactory.mesh("rock")
-	var cells: Array = []
-	for x in w:
-		for y in h:
-			if terrain[y * w + x] == Terrain.ROCK:
-				cells.append(Vector2i(x, y))
+	var xforms: Array = []
+	for y in h:
+		for x in w:
+			var c := Vector2i(x, y)
+			if terrain[idx(c)] != Terrain.ROCK:
+				continue
+			var hk := hash(c)
+			var edge := false
+			for o in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+				var n: Vector2i = c + o
+				if in_bounds(n) and terrain[idx(n)] != Terrain.ROCK:
+					edge = true
+			if hk % 100 > (55 if edge else 25):
+				continue
+			var sx := 0.35 + float(hk % 5) * 0.07
+			var sy := 0.6 + float((hk / 5) % 9) * 0.16
+			var b := Basis(Vector3.UP, float(hk % 628) / 100.0).scaled(Vector3(sx, sy, sx))
+			var off := Vector3(float((hk / 3) % 60) / 100.0 - 0.3, 0.0, float((hk / 11) % 60) / 100.0 - 0.3)
+			var p := Vector3(x + 0.5, 0.0, y + 0.5) + off
+			p.y = height_at(p) - 0.12
+			xforms.append(Transform3D(b, p))
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.mesh = rock_mesh
-	mm.instance_count = cells.size()
-	for i in cells.size():
-		var c: Vector2i = cells[i]
-		var hk := hash(c)
-		var sx := 1.1 + float(hk % 5) * 0.08
-		var sy := 0.45 + float((hk / 5) % 9) * 0.09
-		var b := Basis(Vector3.UP, float(hk % 628) / 100.0).scaled(Vector3(sx, sy, sx))
-		mm.set_instance_transform(i, Transform3D(b, Vector3(c.x + 0.5, -0.03, c.y + 0.5)))
+	_fill_mm(mm, xforms)
 	var mmi := MultiMeshInstance3D.new()
 	mmi.multimesh = mm
-	mmi.material_override = MeshFactory.mat(Color(0.34, 0.32, 0.29), 0.0, 0.95, 0.0)
+	mmi.material_override = MeshFactory.mat(Color(0.17, 0.15, 0.13), 0.0, 0.95, 0.0)
 	add_child(mmi)
 
 

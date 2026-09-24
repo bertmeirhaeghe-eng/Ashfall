@@ -117,7 +117,7 @@ func spawn_unit(id: String, team: int, pos: Vector3) -> Unit:
 	else:
 		u = Unit.new()
 	u.setup(id, team)
-	u.position = Vector3(pos.x, 0.0, pos.z)
+	u.position = Vector3(pos.x, map.height_at(pos), pos.z)
 	world.add_child(u)
 	register(u)
 	return u

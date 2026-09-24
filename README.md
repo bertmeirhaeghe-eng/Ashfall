@@ -72,7 +72,13 @@ Bastion uses GDI khaki-grey with gold trim; the Veil uses Nod gunmetal black wit
 | Rifleman, Rocket Trooper | procedural: GDI helmeted infantry, or Nod hooded gas-mask troops for the Veil |
 | Raider Buggy, Scorpion Tank | procedural: Nod attack buggy, Nod tick-tank-style light tank |
 | Buildings | procedural, one GDI-style and one Nod-style (`*_veil`) version each. The Veil barracks is a Hand of Nod-style temple |
-| Terrain props | procedural tiberium crystal clusters, faceted boulders, blossom tree; dirt/scrub ground detail |
+| Terrain props | procedural tiberium crystal clusters, faceted boulders, blossom tree |
+
+**Terrain and mood** (`scripts/map_grid.gd`, `shaders/`, `main.gd`): a heightmap with rolling hills, flattened
+base plateaus and rock cells that rise into streaked cliffs. `terrain.gdshader` paints ochre dirt, dark scrub
+patches, dust flats with cracks, cliff rock and tiberium-stained soil. `tiberium.gdshader` gives the crystals
+glowing tips, a fresnel rim and a slow pulse. Lighting is a low amber dusk sun with a cold fill, dusty haze,
+filmic grading, drifting ash and embers, and a vignette.
 
 Rebuild after editing `tools/models/procedural.py` or `build_models.py`:
 ```
@@ -86,7 +92,7 @@ the Veil. Material slots are `body panel dark metal team glow glass lamp red tib
 
 ## Known limits (deliberately deferred)
 - No fog of war or shroud, and no air or naval units yet.
-- Flat terrain. High-ground bonuses come later.
+- Height is visual only: units follow hills and cliffs block movement, but there are no high-ground bonuses yet.
 - The simulation isn't deterministic yet, so there's no multiplayer. It needs a fixed-point lockstep layer.
 - Units only push each other apart (they don't use RVO avoidance). Large blobs can jostle in chokepoints.
 - No audio yet.

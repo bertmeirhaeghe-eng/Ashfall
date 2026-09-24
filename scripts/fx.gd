@@ -93,7 +93,7 @@ static func marker(pos: Vector3, color: Color) -> void:
 	tm.inner_radius = 0.8
 	tm.outer_radius = 1.0
 	tm.ring_segments = 4
-	_spawn(Vector3(pos.x, 0.05, pos.z), tm, color, 0.6, 0.35, -0.6)
+	_spawn(Vector3(pos.x, pos.y + 0.05, pos.z), tm, color, 0.6, 0.35, -0.6)
 
 
 func _process(delta: float) -> void:

@@ -171,7 +171,8 @@ func _process(_delta: float) -> void:
 		var d: Dictionary = G.def_of(place_id)
 		var size := Vector2i(int(d["size"][0]), int(d["size"][1]))
 		_ghost_cell = Vector2i(floori(gp.x - size.x * 0.5 + 0.5), floori(gp.z - size.y * 0.5 + 0.5))
-		_ghost.position = Vector3(_ghost_cell.x + size.x * 0.5, 0.3, _ghost_cell.y + size.y * 0.5)
+		var gh: Vector2 = G.map.footprint_height(_ghost_cell, size)
+		_ghost.position = Vector3(_ghost_cell.x + size.x * 0.5, gh.y + 0.3, _ghost_cell.y + size.y * 0.5)
 		var ok: bool = G.can_place(G.local_team, place_id, _ghost_cell)
 		var m := _ghost.material_override as StandardMaterial3D
 		m.albedo_color = Color(0.2, 1.0, 0.3, 0.35) if ok else Color(1.0, 0.2, 0.2, 0.35)

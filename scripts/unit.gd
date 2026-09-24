@@ -97,7 +97,7 @@ func follow_path(delta: float) -> bool:
 	var dist := to.length()
 	var step := speed * delta
 	if dist <= step:
-		position = Vector3(wp.x, 0.0, wp.z)
+		position = wp
 		path_i += 1
 	else:
 		var np := position + to / dist * step
@@ -153,6 +153,10 @@ func _chase(t: Entity, delta: float) -> void:
 
 
 # ---------------------------------------------------------------- per-frame
+
+func _process(_delta: float) -> void:
+	position.y = G.map.height_at(position)  # ride the terrain
+
 
 func _physics_process(delta: float) -> void:
 	if not alive:

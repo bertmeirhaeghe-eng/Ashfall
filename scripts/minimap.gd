@@ -24,9 +24,9 @@ func _ui_to_map(p: Vector2) -> Vector3:
 
 
 func _draw() -> void:
-	if G.map == null or G.map.ground_tex == null:
+	if G.map == null or G.map.radar_tex == null:
 		return
-	draw_texture_rect(G.map.ground_tex, Rect2(Vector2.ZERO, size), false)
+	draw_texture_rect(G.map.radar_tex, Rect2(Vector2.ZERO, size), false)
 	var cell_px := size / Vector2(G.map.w, G.map.h)
 	for e in G.entities:
 		if not e.alive:
