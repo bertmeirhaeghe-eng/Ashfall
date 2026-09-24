@@ -11,6 +11,7 @@ var _t := 0.0
 var _mat: StandardMaterial3D
 var _light: OmniLight3D
 var _base_alpha := 1.0
+var flat := false
 
 
 static func _spawn(pos: Vector3, mesh: Mesh, color: Color, size: float, p_life: float, p_grow: float, shaded := false) -> Fx:
@@ -88,6 +89,77 @@ static func explosion(pos: Vector3, size: float) -> void:
 			s.rise = 0.6
 
 
+static func dust(pos: Vector3) -> void:
+	for i in 4:
+		var off := Vector3(randf_range(-0.4, 0.4), 0.05, randf_range(-0.4, 0.4))
+		var d := _spawn(pos + off, _sphere(), Color(0.45, 0.38, 0.3, 0.6), 0.35, 0.9, 1.4, true)
+		if d:
+			d.rise = 0.25
+
+
+static func sparkle(pos: Vector3, color: Color) -> void:
+	var f := _spawn(pos + Vector3(randf_range(-0.2, 0.2), randf_range(0, 0.3), randf_range(-0.2, 0.2)), _sphere(), color, 0.08, 0.5, 0.5)
+	if f:
+		f.rise = 0.8
+
+
+## Straight energy beam (lasers, Halo Lance, lightning).
+static func beam(a: Vector3, b: Vector3, color: Color, width := 0.06, life := 0.18) -> void:
+	if G.fx_root == null:
+		return
+	var len := a.distance_to(b)
+	if len < 0.01:
+		return
+	var cm := CylinderMesh.new()
+	cm.top_radius = width
+	cm.bottom_radius = width
+	cm.height = 1.0
+	cm.radial_segments = 6
+	cm.rings = 1
+	var f := _spawn((a + b) * 0.5, cm, Color(color.r * 3.0, color.g * 3.0, color.b * 3.0, 0.9), 1.0, life, 0.0)
+	if f:
+		var up := (b - a).normalized()
+		var side := up.cross(Vector3.RIGHT)
+		if side.length() < 0.01:
+			side = up.cross(Vector3.FORWARD)
+		side = side.normalized()
+		var fwd := side.cross(up).normalized()
+		f.transform.basis = Basis(side, up * len, fwd)
+		f.base_scale = -1.0
+
+
+## Jagged lightning bolt from the sky.
+static func lightning(pos: Vector3, color := Color(0.6, 1.0, 0.7)) -> void:
+	var top := pos + Vector3(randf_range(-2, 2), 14.0, randf_range(-2, 2))
+	var prev := top
+	for i in range(1, 7):
+		var k := float(i) / 6.0
+		var p := top.lerp(pos, k) + Vector3(randf_range(-0.6, 0.6), 0, randf_range(-0.6, 0.6)) * (1.0 - k)
+		beam(prev, p, color, 0.08, 0.25)
+		prev = p
+	var f := _spawn(pos + Vector3(0, 0.3, 0), _sphere(), Color(color.r * 3, color.g * 3, color.b * 3, 0.9), 1.2, 0.3, 1.2)
+	if f:
+		f.light_energy = 6.0
+		f._light = OmniLight3D.new()
+		f._light.light_color = color
+		f._light.omni_range = 8.0
+		f._light.light_energy = 6.0
+		f.add_child(f._light)
+
+
+## Flat expanding ring on the ground (pulses, shockwaves).
+static func ring(pos: Vector3, color: Color, radius: float, life := 1.0) -> void:
+	var tm := TorusMesh.new()
+	tm.inner_radius = 0.92
+	tm.outer_radius = 1.0
+	tm.rings = 48
+	tm.ring_segments = 4
+	var gy: float = G.map.height_at(pos) if G.map else 0.0
+	var f := _spawn(Vector3(pos.x, gy + 0.15, pos.z), tm, color, 0.2, life, radius / 0.2 - 1.0)
+	if f:
+		f.flat = true
+
+
 static func marker(pos: Vector3, color: Color) -> void:
 	var tm := TorusMesh.new()
 	tm.inner_radius = 0.8
@@ -99,8 +171,9 @@ static func marker(pos: Vector3, color: Color) -> void:
 func _process(delta: float) -> void:
 	_t += delta
 	var k := clampf(_t / life, 0.0, 1.0)
-	var s := base_scale * maxf(0.05, 1.0 + grow * k)
-	scale = Vector3.ONE * s
+	if base_scale > 0.0:
+		var s := base_scale * maxf(0.05, 1.0 + grow * k)
+		scale = Vector3(s, 0.3 if flat else s, s)
 	position.y += rise * delta
 	if _mat:
 		var c := _mat.albedo_color

@@ -7,6 +7,7 @@ enum HState { SEEK, TO_FIELD, HARVESTING, TO_REFINERY, UNLOADING, WAITING }
 
 var hstate := HState.SEEK
 var cargo := 0.0
+var cargo_blue := 0.0
 var capacity := 500.0
 var harvest_rate := 100.0
 var unload_rate := 250.0
@@ -98,7 +99,7 @@ func _run_job(delta: float) -> void:
 			_set_path(c)
 			hstate = HState.TO_FIELD
 		HState.TO_FIELD:
-			if G.map.crystal_at(harvest_cell) <= 0.0:
+			if not G.map.harvestable(harvest_cell):
 				hstate = HState.SEEK
 				return
 			if follow_path(delta):
@@ -115,8 +116,11 @@ func _run_job(delta: float) -> void:
 			if _tick < 0.25:
 				return
 			_tick = 0.0
+			var kind: int = G.map.crystal_kind_at(harvest_cell)
 			var take: float = G.map.harvest(harvest_cell, minf(harvest_rate * 0.25, capacity - cargo))
 			cargo += take
+			if kind == MapGrid.Crystal.BLUE:
+				cargo_blue += take
 			if cargo >= capacity - 0.01:
 				_go_refinery()
 			elif take <= 0.0:
@@ -133,7 +137,7 @@ func _run_job(delta: float) -> void:
 				_go_refinery()
 				return
 			if follow_path(delta):
-				if position.distance_to(G.map.cell_to_world(refinery.dock_cell())) < 1.6:
+				if G.flat_dist(position, G.map.cell_to_world(refinery.dock_cell())) < 1.6:
 					hstate = HState.UNLOADING
 					_tick = 0.0
 				else:
@@ -146,10 +150,15 @@ func _run_job(delta: float) -> void:
 				_go_refinery()
 				return
 			var amt := minf(cargo, unload_rate * delta)
+			var blue_part := minf(cargo_blue, amt * cargo_blue / maxf(cargo, 0.01))
 			cargo -= amt
-			G.players[team].credits += amt
+			cargo_blue -= blue_part
+			var p: PlayerState = G.players[team]
+			p.credits += amt
+			p.blue_refined += blue_part
 			if cargo <= 0.01:
 				cargo = 0.0
+				cargo_blue = 0.0
 				hstate = HState.SEEK
 		HState.WAITING:
 			_tick -= delta
@@ -188,7 +197,7 @@ func _nearest_refinery() -> Structure:
 func on_damaged() -> void:
 	if G.elapsed - _warned_t > 10.0:
 		_warned_t = G.elapsed
-		G.notify(team, "Harvester under attack")
+		G.notify(team, "Harvester under attack", true)
 	if order != Order.MOVE and cargo > 0.0 and (hstate == HState.HARVESTING or hstate == HState.TO_FIELD):
 		_go_refinery()
 

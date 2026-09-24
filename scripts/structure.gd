@@ -1,7 +1,8 @@
 class_name Structure
 extends Entity
 ## A building on the grid: footprint, power, production role, defense weapon,
-## repair and sell.
+## repair and sell, plus the special roles (detector, inhibitor, shelter,
+## service depot, superweapon uplink).
 
 var cell := Vector2i.ZERO     # top-left footprint cell
 var size := Vector2i(2, 2)
@@ -9,9 +10,12 @@ var power := 0
 var produces: Array = []
 var rally_cell := Vector2i(-1, -1)
 var repairing := false
+var sw_charge := 0.0          # superweapon charge 0..1
+var sw_used := false
 var _build_anim := 1.0
 var _repair_t := 0.0
 var _scan_t := 0.0
+var _depot_t := 0.0
 
 
 func setup_at(id: String, p_team: int, top_left: Vector2i) -> void:
@@ -33,7 +37,7 @@ func setup_at(id: String, p_team: int, top_left: Vector2i) -> void:
 		f.mesh = bm
 		f.position.y = -drop * 0.5 - 0.04
 		f.material_override = MeshFactory.mat(MeshFactory.palette(G.players[team].faction)["concrete"].darkened(0.2), 0.0, 0.9, 0.1)
-		model.add_child(f)
+		add_child(f)  # on the structure itself, so a capture's model rebuild keeps it
 	radius = maxf(size.x, size.y) * 0.5
 
 
@@ -42,12 +46,12 @@ func ring_radius() -> Vector2:
 
 
 func on_placed(instant: bool) -> void:
-	for c in footprint():
-		G.map.set_occupant(c, self)
+	if not def.get("no_footprint", false):
+		for c in footprint():
+			G.map.set_occupant(c, self)
 	if not instant:
 		_build_anim = 0.0
 		model.scale = Vector3(1, 0.05, 1)
-		G.notify(team, "Building: %s" % display_name())
 	if def.has("free_unit"):
 		var u: Unit = G.spawn_unit(def["free_unit"], team, G.map.cell_to_world(dock_cell()))
 		if u is Harvester:
@@ -95,6 +99,32 @@ func is_factory_for(category: String) -> bool:
 	return produces.has(category)
 
 
+func powered() -> bool:
+	return not (G.players[team] as PlayerState).low_power()
+
+
+func detector_radius() -> float:
+	if not powered() or _build_anim < 1.0:
+		return 0.0
+	return float(def.get("detector", 0.0))
+
+
+func inhibitor_radius() -> float:
+	if not powered() or _build_anim < 1.0:
+		return 0.0
+	return float(def.get("inhibitor", 0.0))
+
+
+func shelter_radius() -> float:
+	if _build_anim < 1.0:
+		return 0.0
+	return float(def.get("shelter", 0.0))
+
+
+func is_built() -> bool:
+	return _build_anim >= 1.0
+
+
 func _physics_process(delta: float) -> void:
 	if not alive:
 		return
@@ -105,9 +135,11 @@ func _physics_process(delta: float) -> void:
 		return
 	var p: PlayerState = G.players[team]
 	if not weapon.is_empty():
-		var rof := float(G.game_rule("low_power_defense_mult", 0.5)) if p.low_power() else 1.0
+		var rof := p.defense_rof_mult
+		if p.low_power():
+			rof *= float(G.game_rule("low_power_defense_mult", 0.5))
 		weapon_cd = maxf(0.0, weapon_cd - delta)
-		if not (is_instance_valid(target) and target.alive and in_range(target)):
+		if not (is_instance_valid(target) and target.alive and in_range(target) and can_target(target)):
 			target = null
 			_scan_t -= delta
 			if _scan_t <= 0.0:
@@ -115,6 +147,16 @@ func _physics_process(delta: float) -> void:
 				target = G.find_target(self, weapon_range())
 		if target:
 			aim_and_fire(target, delta, rof)
+	if def.has("superweapon") and not sw_used and powered():
+		sw_charge = minf(1.0, sw_charge + delta / float(def.get("charge_time", 240)))
+	if def.has("repair_vehicles"):
+		_depot_t -= delta
+		if _depot_t <= 0.0:
+			_depot_t = 0.5
+			var r := float(def["repair_vehicles"])
+			for e in G.entities:
+				if e is Unit and e.alive and e.team == team and not e.is_infantry and e.hp < e.max_hp and edge_distance(e.position) <= r:
+					e.heal(e.max_hp * 0.03)
 	if repairing:
 		_repair_t -= delta
 		if _repair_t <= 0.0:
@@ -122,11 +164,11 @@ func _physics_process(delta: float) -> void:
 			if hp >= max_hp:
 				repairing = false
 			else:
-				var heal := max_hp * 0.04
-				var cost := heal / max_hp * float(def.get("cost", 0)) * float(G.game_rule("repair_cost_ratio", 0.5))
+				var heal_amt := max_hp * 0.04
+				var cost := heal_amt / max_hp * float(def.get("cost", 0)) * float(G.game_rule("repair_cost_ratio", 0.5))
 				if p.credits >= cost:
 					p.credits -= cost
-					hp = minf(max_hp, hp + heal)
+					hp = minf(max_hp, hp + heal_amt)
 				else:
 					repairing = false
 					G.notify(team, "Insufficient funds for repair")
@@ -134,10 +176,12 @@ func _physics_process(delta: float) -> void:
 
 func on_damaged() -> void:
 	var p: PlayerState = G.players[team]
-	if G.elapsed - p.last_attack_warning > 8.0:
+	if def.get("decor", false) or def.get("invulnerable", false):
+		return
+	if G.elapsed - p.last_attack_warning > 10.0:
 		p.last_attack_warning = G.elapsed
 		p.last_attack_pos = position
-		G.notify(team, "Our base is under attack!")
+		G.notify(team, "Our base is under attack!", true)
 
 
 func sell() -> void:
@@ -149,14 +193,23 @@ func sell() -> void:
 	alive = false
 	G.notify(team, "Structure sold (+$%d)" % int(refund))
 	Fx.explosion(position + Vector3(0, 0.3, 0), 0.8)
+	if G.mission:
+		G.mission._entity_died(self, null)
 	on_removed()
 	G.unregister(self)
 	queue_free()
 
 
 func on_removed() -> void:
-	for c in footprint():
-		if G.map.occupant_at(c) == self:
-			G.map.set_occupant(c, null)
+	if not def.get("no_footprint", false):
+		for c in footprint():
+			if G.map.occupant_at(c) == self:
+				G.map.set_occupant(c, null)
 	var p: PlayerState = G.players[team]
 	p.recalc_power.call_deferred()
+
+
+func on_team_changed(old: int) -> void:
+	repairing = false
+	(G.players[old] as PlayerState).recalc_power()
+	(G.players[team] as PlayerState).recalc_power()

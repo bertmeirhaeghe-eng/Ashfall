@@ -31,13 +31,31 @@ jobs:
       - name: Import project
         run: godot --headless --import || true
 
-      - name: Smoke test (run the game headless and fail on script errors)
+      - name: Smoke test (main menu, headless, fail on script errors)
         run: |
           godot --headless --path . --quit-after 600 2>&1 | tee run.log
           if grep -E "SCRIPT ERROR|Parse Error|Failed to load script|Compile Error" run.log; then
             echo "::error::Script errors found while running the game"
             exit 1
           fi
+
+      - name: Mission smoke test (every mission runs 150 simulated seconds)
+        run: |
+          godot --headless --path . --fixed-fps 30 --quit-after 120000 -- --test=smoke 2>&1 | tee smoke.log
+          if grep -E "SCRIPT ERROR|Parse Error|Failed to load script|Compile Error" smoke.log; then
+            echo "::error::Script errors found during the mission smoke test"
+            exit 1
+          fi
+          grep -q "TEST PASS smoke" smoke.log || { echo "::error::Mission smoke test did not finish"; exit 1; }
+
+      - name: Campaign test (scripted playthrough of all ten missions)
+        run: |
+          godot --headless --path . --fixed-fps 30 --quit-after 250000 -- --test=campaign 2>&1 | tee campaign.log
+          if grep -E "SCRIPT ERROR|Parse Error|Failed to load script|Compile Error" campaign.log; then
+            echo "::error::Script errors found during the campaign test"
+            exit 1
+          fi
+          grep -q "TEST PASS campaign" campaign.log || { echo "::error::Campaign test failed"; exit 1; }
 
       - name: Export Linux
         run: |
