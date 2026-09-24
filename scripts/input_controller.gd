@@ -145,7 +145,7 @@ func _key(k: InputEventKey) -> void:
 	if num >= 1 and num <= 9:
 		if k.ctrl_pressed or k.meta_pressed:
 			groups[num] = _own_units(selection)
-			G.hud.notify("Group %d set (%d)" % [num, groups[num].size()])
+			G.hud.notify(tr("Group %d set (%d)") % [num, groups[num].size()])
 		else:
 			var g: Array = groups.get(num, [])
 			var valid: Array = []
@@ -402,8 +402,10 @@ func _order_attack_move(pos: Vector2) -> void:
 
 func _try_place() -> void:
 	if G.place_structure(G.local_team, place_id, _ghost_cell):
+		Sfx.ui("place", 0.0)
 		cancel_mode()
 	else:
+		Sfx.ui("error")
 		G.hud.notify("Cannot place there")
 
 
@@ -415,6 +417,7 @@ func _structure_action(pos: Vector2, keep_mode: bool) -> void:
 		if e.def.get("invulnerable", false):
 			G.hud.notify("That cannot be sold")
 		else:
+			Sfx.ui("sell")
 			e.sell()
 	elif mode == Mode.REPAIR:
 		e.repairing = not e.repairing

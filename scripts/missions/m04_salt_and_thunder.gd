@@ -255,7 +255,7 @@ func _check_charges() -> void:
 					if u.has_meta("planting") and u.get_meta("planting") == p:
 						u.remove_meta("planting")
 						u.hold_position = false
-				G.notify(PLAYER, "Charge armed on pillar %d." % (i + 1), true)
+				G.notify(PLAYER, tr("Charge armed on pillar %d.") % (i + 1), true)
 	_update_charge_text()
 	if all_armed() and not flooded and flood_t < 0.0:
 		if is_active("charges"):
@@ -273,7 +273,7 @@ func _update_charge_text() -> void:
 		if float(charge[p]) == -1.0:
 			n += 1
 	if is_active("charges"):
-		set_text("charges", "Plant demolition charges on the dam's three support pillars with Engineers (%d/3)." % n)
+		set_text("charges", "Plant demolition charges on the dam's three support pillars with Engineers (%d/3).", [n])
 
 
 func _pullback_timer() -> void:
@@ -356,7 +356,7 @@ func _check_nomads() -> void:
 				cv.remove_silently()
 			elif cv.order == Unit.Order.IDLE:
 				cv.cmd_move(EVAC)
-	set_text("nomads", "Evacuate the nomad camp in the riverbed before the flood (%d/20 safe)." % nomads_saved)
+	set_text("nomads", "Evacuate the nomad camp in the riverbed before the flood (%d/20 safe).", [nomads_saved])
 	if nomads_saved + nomads_lost >= 20 and nomads_saved >= 15:
 		_nomads_done()
 

@@ -137,7 +137,7 @@ func deploy() -> bool:
 			var old_team := team
 			remove_silently()
 			var s: Structure = G.spawn_structure(sid, old_team, c)
-			G.notify(old_team, "%s deployed" % s.display_name(), true)
+			G.notify(old_team, tr("%s deployed") % s.display_name())
 			if G.mission:
 				G.mission.on_deployed(s)
 			return true
@@ -166,7 +166,7 @@ func board(u: Unit) -> bool:
 		return false
 	passengers.append({"id": u.def_id, "hp": u.hp, "rank": u.rank, "kills": u.kills, "tags": u.tags})
 	u.remove_silently()
-	G.notify(team, "%s boarded (%d/%d)" % [u.display_name(), passengers.size(), transport_cap()])
+	G.notify(team, tr("%s boarded (%d/%d)") % [u.display_name(), passengers.size(), transport_cap()])
 	return true
 
 

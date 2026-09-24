@@ -227,7 +227,7 @@ func _checks() -> void:
 			say("okafor", "Base is up on the rim. Break those Guardians and get the dampers to the shaft.")
 		var g := count_tagged("guardian")
 		if is_active("guardians"):
-			set_text("guardians", "Destroy SIBYL's three Shaft Guardians to open the path to the underground (%d/3)." % (3 - g))
+			set_text("guardians", "Destroy SIBYL's three Shaft Guardians to open the path to the underground (%d/3).", [(3 - g)])
 			if g == 0:
 				complete("guardians")
 				say("lindqvist", "The shaft is open! Bring the dampers to the entrance, Commander.")
@@ -480,10 +480,10 @@ func _install(delta: float) -> void:
 			if not (is_instance_valid(d) and d.alive):
 				chamber_state[i] = 0
 				chamber_damper[i] = null
-				say("havel", "We lost the damper in chamber %d!" % (i + 1))
+				say("havel", "We lost the damper in chamber %d!", [(i + 1)])
 				continue
 			chamber_progress[i] += delta
-			set_timer("ch%d" % i, "Damper %d installing" % (i + 1), INSTALL_TIME - chamber_progress[i])
+			set_timer("ch%d" % i, "Damper %d installing", INSTALL_TIME - chamber_progress[i], [i + 1])
 			if chamber_progress[i] >= INSTALL_TIME:
 				chamber_state[i] = 2
 				d.invulnerable = true
@@ -494,7 +494,7 @@ func _install(delta: float) -> void:
 				say("lindqvist", ["One damper running. The heartbeat is slowing.", "Two running. It's fighting us, Commander, I can feel it."][mini(_count_running(), 2) - 1] if _count_running() < 3 else "All three dampers are running!")
 		if chamber_state[i] == 2:
 			running += 1
-	set_text("dampers", "Escort the three dampers to the heart-chambers and defend each while it installs (%d/3)." % running)
+	set_text("dampers", "Escort the three dampers to the heart-chambers and defend each while it installs (%d/3).", [running])
 	if running >= 3 and not heartbeat_stopped:
 		_sleep()
 

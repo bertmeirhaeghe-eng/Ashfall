@@ -194,7 +194,7 @@ func tick(delta: float) -> void:
 	for t in towers:
 		if is_instance_valid(t) and t.alive:
 			alive_towers += 1
-	set_text("relays", "Destroy the four SIBYL relay towers around the city (%d/4)." % (4 - alive_towers))
+	set_text("relays", "Destroy the four SIBYL relay towers around the city (%d/4).", [(4 - alive_towers)])
 	if alive_towers == 0 and is_active("relays"):
 		complete("relays")
 	if not _twist and (alive_towers <= 2 or time > 720.0):
@@ -259,7 +259,7 @@ func on_enter(u: Unit, t: Entity) -> bool:
 		t.tags["hardened_until"] = time + 20.0
 		u.remove_silently()
 		reboots += 1
-		set_text("reboot", "Recapture hijacked Bastion units with Engineers instead of destroying them (%d/3)." % mini(reboots, 3))
+		set_text("reboot", "Recapture hijacked Bastion units with Engineers instead of destroying them (%d/3).", [mini(reboots, 3)])
 		if reboots >= 3 and is_active("reboot"):
 			complete("reboot")
 		say_once("reboot_line", "engineer", "Rebooted. She's ours again, Commander, and SIBYL is out of her head.")
@@ -279,7 +279,10 @@ func on_entity_died(e: Entity, _killer: Entity) -> void:
 				u.set_team(PLAYER)
 				u.tags.erase("hijacked_by")
 				back += 1
-		say("kestrel", "Tower down!" + (" %d of your machines just woke up on our side." % back if back > 0 else ""))
+		if back > 0:
+			say("kestrel", "Tower down! %d of your machines just woke up on our side.", [back])
+		else:
+			say("kestrel", "Tower down!")
 		if once("sibyl_tower"):
 			say("sibyl", "A tower is a thought, Commander. I have many thoughts.")
 

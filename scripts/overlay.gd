@@ -52,7 +52,7 @@ func _draw() -> void:
 		if label != "":
 			var mp := get_viewport().get_mouse_position()
 			var font := get_theme_default_font()
-			draw_string(font, mp + Vector2(18, 28), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(1, 0.9, 0.4))
+			draw_string(font, mp + Vector2(18, 28), tr(label), HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(1, 0.9, 0.4))
 
 
 func _draw_bars(e, sp: Vector2) -> void:

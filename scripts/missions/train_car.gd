@@ -15,8 +15,10 @@ func setup_car(p_role: String, team_id: int) -> void:
 	is_structure = true
 	var ids := {"engine": "train_engine", "flak": "train_flak", "artillery": "train_artillery",
 		"troop": "train_troop", "repair": "train_repair", "command": "train_command"}
+	var names := {"engine": "Pilgrim Engine Car", "flak": "Pilgrim Flak Car", "artillery": "Pilgrim Artillery Car",
+		"troop": "Pilgrim Troop Car", "repair": "Pilgrim Repair Car", "command": "Pilgrim Command Car"}
 	def_id = ids[role]
-	def = {"name": "Pilgrim " + role.capitalize() + " Car", "hp": 1500, "armor": "heavy", "radius": 0.9,
+	def = {"name": names[role], "hp": 1500, "armor": "heavy", "radius": 0.9,
 		"height": 1.3, "model": def_id, "faction": "veil"}
 	match role:
 		"engine":
@@ -50,7 +52,7 @@ func setup_car(p_role: String, team_id: int) -> void:
 
 
 func display_name() -> String:
-	return def["name"]
+	return tr(def["name"])
 
 
 func place(pos: Vector3, dir: Vector3) -> void:

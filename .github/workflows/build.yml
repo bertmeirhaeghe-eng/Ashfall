@@ -57,6 +57,19 @@ jobs:
           fi
           grep -q "TEST PASS campaign" campaign.log || { echo "::error::Campaign test failed"; exit 1; }
 
+      - name: Dutch translation coverage (every string in the code has a Dutch entry)
+        run: python3 tools/lang/extract_strings.py --verbose
+
+      - name: Dutch mission smoke test (fails on text shown without a translation)
+        run: |
+          godot --headless --path . --fixed-fps 30 --quit-after 120000 -- --test=smoke --lang=nl --langcheck 2>&1 | tee smoke_nl.log
+          if grep -E "SCRIPT ERROR|Parse Error|Failed to load script|Compile Error" smoke_nl.log; then
+            echo "::error::Script errors found during the Dutch smoke test"
+            exit 1
+          fi
+          grep -q "TEST PASS smoke" smoke_nl.log || { echo "::error::Dutch smoke test did not finish"; exit 1; }
+          python3 tools/lang/check_runtime.py < smoke_nl.log
+
       - name: Export Linux
         run: |
           mkdir -p build/linux

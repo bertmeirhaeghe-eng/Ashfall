@@ -121,10 +121,13 @@ func _save_shot(tag: String) -> void:
 
 
 func _shot_menu(spec: String) -> void:
-	# shot0:menu | shot0:briefing | shot0:prologue
+	# shot0:menu | shot0:options | shot0:briefing | shot0:prologue
 	var what := spec.get_slice(":", 1)
-	if what == "menu" or what == "":
+	if what == "menu" or what == "" or what == "options":
 		get_tree().change_scene_to_file(Campaign.MENU_SCENE)
+		if what == "options":
+			await get_tree().create_timer(0.5).timeout
+			get_tree().current_scene.call("_on_options")
 	else:
 		Campaign.story_mode = what
 		get_tree().change_scene_to_file(Campaign.STORY_SCENE)
@@ -136,14 +139,15 @@ func _shot_menu(spec: String) -> void:
 ## Speaks one line per character through the active voice backend (run with
 ## ASHFALL_VOICE=kokoro) and saves the rendered Kokoro audio for inspection.
 func _voice_test() -> void:
-	print("TEST voice backend: ", Voice.backend_name())
-	if Voice.backend != Voice.Backend.KOKORO:
-		_fail("Kokoro backend not active")
+	print("TEST voice backend: ", Voice.backend_name(), "  language: ", Settings.language)
+	if not ["kokoro", "kokoro_nl", "piper"].has(Voice.engine_for(Settings.language)):
+		_fail("no rendering voice engine (Kokoro / Piper) active")
 		return
-	var lines := [["okafor", "Commander, welcome to the Rhine."], ["havel", "Bad news first."],
-		["rourke", "I don't waste loans."], ["sibyl", "Every machine you own already listens to me."],
-		["tallow", "Don't wake the Maw."], ["kestrel", "Let's not waste each other's time."],
-		["lindqvist", "I think the Seed is not a rock."], ["narrator", "In 2031, the night sky filled with green fire."]]
+	var lines := [["okafor", "I don't like it either, Commander. But I like losing Istanbul less. She's under your command."],
+		["havel", "The Pilgrim is rolling. Here it comes."], ["rourke", "I taught you everything you're about to try, Commander."],
+		["sibyl", "A tower is a thought, Commander. I have many thoughts."], ["tallow", "We kept our word, Bastion. Now keep yours."],
+		["kestrel", "This is for Oriel."], ["lindqvist", "Sample one. It's warm, Commander. Crystal shouldn't be warm."],
+		["narrator", "In the night sky, a tiny green star is moving. Towards Earth."]]
 	var t0 := Time.get_ticks_msec()
 	var started := {}
 	Voice.line_started.connect(func(spk, _n, _t, _c): started[spk] = (Time.get_ticks_msec() - t0) / 1000.0)
@@ -160,7 +164,7 @@ func _voice_test() -> void:
 			_fail("no audio rendered for " + l[0])
 			return
 		var secs := wav.get_length()
-		print("TEST voice %-10s voice #%d  %.2fs audio, started at %.2fs" % [l[0], item["sid"], secs, started.get(l[0], -1.0)])
+		print("TEST voice %-10s voice %s  %.2fs audio, started at %.2fs  \"%s\"" % [l[0], str(item["sid"]), secs, started.get(l[0], -1.0), item["text"]])
 		if dir != "":
 			wav.save_to_wav(dir.path_join("voice_%s.wav" % l[0]))
 	print("TEST voice all lines finished in %.1fs" % total)
@@ -177,10 +181,23 @@ func _wait_time(m: Mission, secs: float) -> void:
 
 
 func _pass(what: String) -> void:
+	_report_translations()
 	print("TEST PASS %s" % what)
 	get_tree().quit(0)
 
 
 func _fail(msg: String) -> void:
+	_report_translations()
 	print("TEST FAIL %s" % msg)
 	get_tree().quit(1)
+
+
+## With --langcheck: every string that was shown or spoken without a translation.
+func _report_translations() -> void:
+	if not OS.get_cmdline_user_args().has("--langcheck"):
+		return
+	var miss: Array = Settings.missing_translations()
+	miss.sort()
+	for s in miss:
+		print("TEST untranslated: ", str(s).replace("\n", "\\n"))
+	print("TEST untranslated total: %d" % miss.size())

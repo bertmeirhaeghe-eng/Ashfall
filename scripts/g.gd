@@ -285,7 +285,9 @@ func engineer_enter(eng: Unit, target: Entity) -> void:
 	if target is Structure and target.def.get("capturable", false) and target.team != eng.team:
 		var old := target.team
 		target.set_team(eng.team)
-		notify(eng.team, "Building captured: %s" % target.display_name(), true)
+		notify(eng.team, tr("Building captured: %s") % target.display_name())
+		if eng.team == local_team:
+			Voice.eva("Building captured")
 		if mission:
 			mission.on_captured(target, old, eng.team)
 		eng.remove_silently()
@@ -387,9 +389,9 @@ func notify(team: int, msg: String, speak := false) -> void:
 	if team != local_team:
 		return
 	if hud:
-		hud.notify(msg)
+		hud.notify(msg)   # translated there; formatted messages come pre-translated
 	if speak:
-		Voice.eva(msg)
+		Voice.eva(msg)    # EVA speech is looked up from the English message
 
 
 ## Distance on the ground plane (ignores terrain height).

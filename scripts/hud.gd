@@ -41,6 +41,7 @@ var sell_btn: Button
 var repair_btn: Button
 var _refresh_t := 0.0
 var _lance_btn: Button
+var options_panel: OptionsPanel
 
 
 func _ready() -> void:
@@ -66,6 +67,12 @@ func _ready() -> void:
 	_rebuild_grid()
 	Voice.line_started.connect(_on_line_started)
 	Voice.line_finished.connect(_on_line_finished)
+	Settings.language_changed.connect(_on_language_changed)
+
+
+func _on_language_changed() -> void:
+	refresh_objectives()
+	_rebuild_grid()
 
 
 # ================================================================ construction
@@ -287,7 +294,7 @@ func _centered_panel(w: float, h: float) -> PanelContainer:
 
 
 func _build_menu() -> void:
-	menu_panel = _centered_panel(320, 300)
+	menu_panel = _centered_panel(320, 350)
 	var vb := VBoxContainer.new()
 	vb.alignment = BoxContainer.ALIGNMENT_CENTER
 	vb.add_theme_constant_override("separation", 10)
@@ -298,7 +305,7 @@ func _build_menu() -> void:
 	t.add_theme_font_size_override("font_size", 22)
 	t.add_theme_color_override("font_color", GOLD)
 	vb.add_child(t)
-	for pair in [["Resume", toggle_menu], ["Restart Mission", _restart], ["Main Menu", Campaign.to_menu], ["Quit Game", func(): get_tree().quit()]]:
+	for pair in [["Resume", toggle_menu], ["Restart Mission", _restart], ["Options", _open_options], ["Main Menu", Campaign.to_menu], ["Quit Game", func(): get_tree().quit()]]:
 		var b := Button.new()
 		b.text = pair[0]
 		b.custom_minimum_size = Vector2(0, 40)
@@ -332,7 +339,23 @@ func _restart() -> void:
 	get_tree().reload_current_scene()
 
 
+func _open_options() -> void:
+	menu_panel.visible = false
+	var op := OptionsPanel.new()
+	op.set_anchors_preset(Control.PRESET_CENTER)
+	op.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	op.grow_vertical = Control.GROW_DIRECTION_BOTH
+	op.position.x -= SIDEBAR_W / 2.0
+	root.add_child(op)
+	options_panel = op
+	op.closed.connect(func():
+		options_panel = null
+		menu_panel.visible = true)
+
+
 func toggle_menu() -> void:
+	if options_panel:
+		return
 	if G.game_over and not menu_panel.visible:
 		return
 	menu_panel.visible = not menu_panel.visible
@@ -458,15 +481,18 @@ func _cameo_label(text: String, pos: Vector2, fsize: int, col: Color) -> Label:
 func _tooltip(id: String) -> String:
 	var d: Dictionary = G.def_of(id)
 	var lines: Array = []
-	lines.append("%s  —  $%d, %ds" % [d.get("name", id), int(d.get("cost", 0)), int(d.get("build_time", 0))])
-	lines.append("HP %d   Armor: %s" % [int(d.get("hp", 0)), d.get("armor", "-")])
+	lines.append("%s  —  $%d, %ds" % [tr(d.get("name", id)), int(d.get("cost", 0)), int(d.get("build_time", 0))])
+	lines.append(tr("HP %d   Armor: %s") % [int(d.get("hp", 0)), tr(str(d.get("armor", "-")).capitalize())])
+	if d.has("desc"):
+		lines.append(tr(d["desc"]))
 	if d.has("power"):
-		lines.append("Power: %+d" % int(d["power"]))
+		lines.append(tr("Power: %+d") % int(d["power"]))
 	if d.has("weapon"):
 		var w: Dictionary = G.weapon_def(d["weapon"])
-		lines.append("Weapon: %s dmg, range %.1f, every %.1fs (%s targets)" % [int(w.get("damage", 0)), float(w.get("range", 0)), float(w.get("cooldown", 0)), w.get("targets", "ground")])
+		var targets := {"ground": "ground", "air": "air", "both": "ground and air"}
+		lines.append(tr("Weapon: %s dmg, range %.1f, every %.1fs (%s targets)") % [int(w.get("damage", 0)), float(w.get("range", 0)), float(w.get("cooldown", 0)), tr(targets.get(w.get("targets", "ground"), "ground"))])
 		var wh: Dictionary = G.rules.get("warheads", {}).get(w.get("warhead", ""), {})
-		lines.append("Effective vs:  Inf %d%%  Light %d%%  Heavy %d%%  Bldg %d%%" % [
+		lines.append(tr("Effective vs:  Inf %d%%  Light %d%%  Heavy %d%%  Bldg %d%%") % [
 			int(wh.get("infantry", 1) * 100), int(wh.get("light", 1) * 100),
 			int(wh.get("heavy", 1) * 100), int(wh.get("structure", 1) * 100)])
 	var notes := {"engineer": "Captures buildings (RMB on them)", "heal": "Heals nearby infantry",
@@ -477,26 +503,27 @@ func _tooltip(id: String) -> String:
 		"repair_vehicles": "Repairs nearby vehicles", "radar": "Enables the radar minimap", "limit": "Limit one"}
 	for k in notes.keys():
 		if d.has(k) and d[k]:
-			lines.append(notes[k])
+			lines.append(tr(notes[k]))
 	if d.get("move", "") == "hover":
-		lines.append("Hover: crosses water")
+		lines.append(tr("Hover: crosses water"))
 	elif d.get("move", "") == "air":
-		lines.append("Aircraft: grounded by glass storms")
+		lines.append(tr("Aircraft: grounded by glass storms"))
 	elif d.get("move", "") == "jump":
-		lines.append("Jump-jet: crosses any terrain")
+		lines.append(tr("Jump-jet: crosses any terrain"))
 	if d.has("capacity"):
-		lines.append("Carries $%d of crystal per trip" % int(d["capacity"]))
+		lines.append(tr("Carries $%d of crystal per trip") % int(d["capacity"]))
 	var pre: Array = d.get("prereq", [])
 	if not pre.is_empty() and G.players[G.local_team].queue_cat(id) != "veil":
 		var names: Array = []
 		for r in pre:
-			names.append(G.def_of(r).get("name", r))
-		lines.append("Requires: " + ", ".join(PackedStringArray(names)))
-	lines.append("LMB: build / place    RMB: cancel")
+			names.append(tr(G.def_of(r).get("name", r)))
+		lines.append(tr("Requires: %s") % ", ".join(PackedStringArray(names)))
+	lines.append(tr("LMB: build / place    RMB: cancel"))
 	return "\n".join(PackedStringArray(lines))
 
 
 func _on_cameo_left(id: String) -> void:
+	Sfx.ui("click")
 	var p: PlayerState = G.players[G.local_team]
 	var cat := p.queue_cat(id)
 	var is_bldg := cat == "structure" or cat == "defense"
@@ -508,12 +535,16 @@ func _on_cameo_left(id: String) -> void:
 		return
 	if not p.can_build(id):
 		var missing := p.missing_prereqs(id)
+		Sfx.ui("error")
 		if G.def_of(id).has("limit") and p.count_of(id) >= int(G.def_of(id)["limit"]):
 			notify("Limit reached")
 		elif missing.is_empty():
 			notify("Cannot build that now")
 		else:
-			notify("Requires: " + ", ".join(PackedStringArray(missing)))
+			var names: Array = []
+			for m in missing:
+				names.append(tr(str(m)))
+			notify(tr("Requires: %s") % ", ".join(PackedStringArray(names)))
 		return
 	if not p.queue_item(id):
 		notify("Queue full")
@@ -549,7 +580,7 @@ func _refresh() -> void:
 		return
 	var p: PlayerState = G.players[G.local_team]
 	credits_label.text = "$ %d" % int(p.credits)
-	power_label.text = "Power %d / %d" % [p.power_used, p.power_produced]
+	power_label.text = tr("Power %d / %d") % [p.power_used, p.power_produced]
 	power_label.add_theme_color_override("font_color", Color(1, 0.35, 0.3) if p.low_power() else Color(0.8, 0.85, 0.8))
 	power_bar.value = clampf(float(p.power_used) / maxf(p.power_produced, 1.0), 0.0, 1.0)
 	var blink := int(Time.get_ticks_msec() / 350) % 2 == 0
@@ -557,7 +588,7 @@ func _refresh() -> void:
 		var label: String = ""
 		for tt in TABS:
 			if tt[0] == t:
-				label = tt[1]
+				label = tr(tt[1])
 		if p.ready_structure.get(t, "") != "":
 			label += "!"
 		tab_buttons[t].text = label
@@ -579,7 +610,7 @@ func _refresh() -> void:
 			status.text = "%d%%%s" % [int(progress * 100), (" x%d" % count) if count > 1 else ""]
 			prog.size.x = 122 * progress
 		elif count > 0:
-			status.text = "x%d queued" % count
+			status.text = tr("x%d queued") % count
 			prog.size.x = 0
 		else:
 			status.text = "" if can else "locked"
@@ -587,11 +618,11 @@ func _refresh() -> void:
 	var up := _uplink()
 	if up:
 		if up.sw_used:
-			set_special("_lance", "Halo Lance: spent", false)
+			set_special("_lance", tr("Halo Lance: spent"), false)
 		elif up.sw_charge >= 1.0:
-			set_special("_lance", "HALO LANCE READY" if blink else "Halo Lance ready", true)
+			set_special("_lance", tr("HALO LANCE READY") if blink else tr("Halo Lance ready"), true)
 		else:
-			set_special("_lance", "Halo Lance charging %d%%" % int(up.sw_charge * 100), false)
+			set_special("_lance", tr("Halo Lance charging %d%%") % int(up.sw_charge * 100), false)
 	else:
 		_lance_btn.visible = false
 	var ctl: InputController = G.controller
@@ -604,18 +635,20 @@ func _refresh() -> void:
 		var parts: Array = []
 		for k in G.mission.timers.keys():
 			var tm: Dictionary = G.mission.timers[k]
+			var args: Array = tm.get("args", [])
+			var txt: String = tr(tm["text"]) % args if not args.is_empty() else tr(tm["text"])
 			if float(tm["t"]) < 0.0:
-				parts.append(tm["text"])
+				parts.append(txt)
 				continue
 			var secs := int(ceil(float(tm["t"])))
-			parts.append("%s  %d:%02d" % [tm["text"], secs / 60, secs % 60])
+			parts.append("%s  %d:%02d" % [txt, secs / 60, secs % 60])
 		timer_label.text = "     ".join(PackedStringArray(parts))
 
 
 func refresh_objectives() -> void:
 	if G.mission == null:
 		return
-	var lines: Array = ["[color=#d9a833][b]OBJECTIVES[/b][/color]  [color=#777777](O to hide)[/color]"]
+	var lines: Array = ["[color=#d9a833][b]%s[/b][/color]  [color=#777777]%s[/color]" % [tr("OBJECTIVES"), tr("(O to hide)")]]
 	for o in G.mission.objectives:
 		if not o["visible"]:
 			continue
@@ -630,9 +663,9 @@ func refresh_objectives() -> void:
 				col = "#e05a4c"
 		var kind := ""
 		match o["kind"]:
-			"secondary": kind = "[color=#8ccff5]Secondary:[/color] "
-			"bonus": kind = "[color=#f2d06b]Bonus:[/color] "
-		lines.append("[color=%s]%s[/color] %s[color=%s]%s[/color]" % [col, mark, kind, col, o["text"]])
+			"secondary": kind = "[color=#8ccff5]%s[/color] " % tr("Secondary:")
+			"bonus": kind = "[color=#f2d06b]%s[/color] " % tr("Bonus:")
+		lines.append("[color=%s]%s[/color] %s[color=%s]%s[/color]" % [col, mark, kind, col, G.mission.objective_text(o)])
 	obj_label.text = "\n".join(PackedStringArray(lines))
 
 
@@ -645,28 +678,28 @@ func _selection_text(sel: Array) -> String:
 		return ""
 	if valid.size() == 1:
 		var e = valid[0]
-		var owner_name: String = G.players[e.team].display
-		var s := "%s  [%s]\nHP %d / %d" % [e.display_name(), owner_name, int(e.hp), int(e.max_hp)]
+		var owner_name: String = tr(G.players[e.team].display)
+		var s := "%s  [%s]\n%s" % [e.display_name(), owner_name, tr("HP %d / %d") % [int(e.hp), int(e.max_hp)]]
 		if e.rank > 0:
 			var rank_names: Array = ["", "Veteran", "Elite"]
-			s += "   %s" % rank_names[e.rank]
+			s += "   %s" % tr(rank_names[e.rank])
 		if e is Harvester:
-			s += "\nCargo $%d / %d  —  %s" % [int(e.cargo), int(e.capacity), e.state_text()]
+			s += "\n" + tr("Cargo $%d / %d  —  %s") % [int(e.cargo), int(e.capacity), tr(e.state_text())]
 		elif e is Structure:
-			s += "   Power %+d" % e.power
+			s += "   " + tr("Power %+d") % e.power
 			if not e.produces.is_empty() and e.team == G.local_team:
-				s += "\nRMB on the ground sets the rally point"
+				s += "\n" + tr("RMB on the ground sets the rally point")
 		elif e is Unit:
 			if e.kills > 0:
-				s += "   Kills %d" % e.kills
+				s += "   " + tr("Kills %d") % e.kills
 			if e.transport_cap() > 0:
-				s += "\nPassengers %d / %d  (D to unload)" % [e.passengers.size(), e.transport_cap()]
+				s += "\n" + tr("Passengers %d / %d  (D to unload)") % [e.passengers.size(), e.transport_cap()]
 			if e.def.has("deploys") and e.team == G.local_team:
-				s += "\nD: deploy"
+				s += "\n" + tr("D: deploy")
 			if e.is_engineer() and e.team == G.local_team:
-				s += "\nRMB a building to capture it"
+				s += "\n" + tr("RMB a building to capture it")
 			if e.def.get("networked", false):
-				s += "\nNetworked (can be hijacked)"
+				s += "\n" + tr("Networked (can be hijacked)")
 		return s
 	var counts := {}
 	for e in valid:
@@ -675,12 +708,12 @@ func _selection_text(sel: Array) -> String:
 	var parts: Array = []
 	for n in counts.keys():
 		parts.append("%d× %s" % [counts[n], n])
-	return "%d selected\n%s" % [valid.size(), ",  ".join(PackedStringArray(parts))]
+	return tr("%d selected") % valid.size() + "\n" + ",  ".join(PackedStringArray(parts))
 
 
 func notify(text: String) -> void:
 	var l := Label.new()
-	l.text = text
+	l.text = tr(text)
 	l.add_theme_color_override("font_color", Color(0.75, 0.95, 1.0))
 	l.add_theme_font_size_override("font_size", 15)
 	msg_box.add_child(l)
@@ -708,19 +741,19 @@ func _on_line_finished(_speaker: String) -> void:
 func show_mission_end(victory: bool, reason: String) -> void:
 	for c in end_buttons.get_children():
 		c.queue_free()
-	end_title.text = "MISSION ACCOMPLISHED" if victory else "MISSION FAILED"
+	end_title.text = tr("MISSION ACCOMPLISHED") if victory else tr("MISSION FAILED")
 	end_title.add_theme_color_override("font_color", GOLD if victory else Color(1, 0.3, 0.25))
 	var lines: Array = []
 	var m: Dictionary = Campaign.mission_info(G.mission.number)
-	lines.append("[color=#d9a833]Mission %d: %s[/color]\n" % [m["id"], m["title"]])
+	lines.append("[color=#d9a833]%s[/color]\n" % (tr("Mission %d: %s") % [m["id"], tr(m["title"])]))
 	if not victory and reason != "":
-		lines.append("[color=#ff8070]%s[/color]\n" % reason)
+		lines.append("[color=#ff8070]%s[/color]\n" % tr(reason))
 	for o in G.mission.objectives:
 		if not o["visible"]:
 			continue
 		var st := "Complete" if o["state"] == "done" else ("Failed" if o["state"] == "failed" else "Incomplete")
 		var col := "#7fdc85" if o["state"] == "done" else ("#e05a4c" if o["state"] == "failed" else "#aaaaaa")
-		lines.append("[color=%s]%s[/color]  %s (%s)" % [col, st, o["text"], o["kind"]])
+		lines.append("[color=%s]%s[/color]  %s (%s)" % [col, tr(st), G.mission.objective_text(o), tr(o["kind"])])
 	end_body.text = "\n".join(PackedStringArray(lines))
 	if victory:
 		var b := Button.new()

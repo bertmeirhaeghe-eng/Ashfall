@@ -61,6 +61,7 @@ func _ready() -> void:
 	G.hud = hud
 	mission.begin()
 	hud.refresh_objectives()
+	Music.start()   # the player has control from here on
 	if Campaign.debug_autotest != "":
 		TestRunner.attach(mission)
 
