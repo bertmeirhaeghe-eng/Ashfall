@@ -28,6 +28,7 @@ var _rain: GPUParticles3D
 var _splash: GPUParticles3D
 var _ground_mat: ShaderMaterial
 var _pulses: Array = []         # pending flicker pulses [time, strength]
+var _mist: MultiMeshInstance3D
 
 
 func setup(p_kind: String, p_storm: String, p_env: Environment, p_sun: DirectionalLight3D, p_cam: RTSCamera) -> void:
@@ -42,6 +43,8 @@ func setup(p_kind: String, p_storm: String, p_env: Environment, p_sun: Direction
 	if storm == "ion" and (kind == "none" or kind == ""):
 		kind = "rain"
 	_build_precipitation()
+	_build_mist()
+	Settings.changed.connect(_on_settings)
 	if storm != "":
 		# a cold light from overhead that only shines during a flash
 		_flash_light = DirectionalLight3D.new()
@@ -70,6 +73,54 @@ func _set_wet(w: float) -> void:
 	if g and g.material_override is ShaderMaterial:
 		_ground_mat = g.material_override
 		_ground_mat.set_shader_parameter("wetness", w)
+
+
+# ================================================================ mist
+
+## Soft white mist banks hovering low over the whole map, drifting with the
+## wind (Options: Battlefield mist). Tinted a little by the mission's fog.
+func _build_mist() -> void:
+	if G.map == null:
+		return
+	var w := float(G.map.w)
+	var h := float(G.map.h)
+	var count := clampi(int(w * h / [70.0, 45.0, 30.0][Settings.graphics]), 40, 420)
+	var quad := PlaneMesh.new()
+	quad.size = Vector2(1, 1)
+	var mat := ShaderMaterial.new()
+	mat.shader = load("res://shaders/fx/mist.gdshader")
+	var tint: Color = env.fog_light_color if env else Color(0.9, 0.9, 0.9)
+	mat.set_shader_parameter("mist_color", Color(0.93, 0.94, 0.97).lerp(tint, 0.2))
+	mat.set_shader_parameter("map_size", Vector2(w, h))
+	mat.set_shader_parameter("wind", Vector2(randf_range(0.2, 0.45), randf_range(-0.2, 0.2)))
+	mat.set_shader_parameter("glow", 0.08 + 0.12 * G.darkness)
+	quad.material = mat
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_custom_data = true
+	mm.mesh = quad
+	mm.instance_count = count
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 4242
+	for i in count:
+		var p := Vector3(rng.randf_range(0, w), 0, rng.randf_range(0, h))
+		p.y = G.map.height_at(p) + rng.randf_range(0.9, 3.2)
+		var s := rng.randf_range(6.0, 13.0)
+		var b := Basis(Vector3.UP, rng.randf() * TAU) * Basis.from_scale(Vector3(s, 1, s * rng.randf_range(0.6, 1.0)))
+		mm.set_instance_transform(i, Transform3D(b, p))
+		mm.set_instance_custom_data(i, Color(rng.randf(), rng.randf(), 0, 0))
+	_mist = MultiMeshInstance3D.new()
+	_mist.name = "Mist"
+	_mist.multimesh = mm
+	_mist.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_mist.custom_aabb = AABB(Vector3(-20, -10, -20), Vector3(w + 40, 40, h + 40))
+	_mist.visible = Settings.mist
+	add_child(_mist)
+
+
+func _on_settings() -> void:
+	if _mist:
+		_mist.visible = Settings.mist
 
 
 # ================================================================ precipitation

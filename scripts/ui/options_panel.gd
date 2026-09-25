@@ -80,6 +80,15 @@ func _ready() -> void:
 	grid.add_child(_gfx_btn)
 	grid.add_child(Control.new())
 
+	var ml := Label.new()
+	ml.text = "Battlefield mist"
+	grid.add_child(ml)
+	var mist_btn := CheckButton.new()
+	mist_btn.button_pressed = Settings.mist
+	mist_btn.toggled.connect(_on_mist)
+	grid.add_child(mist_btn)
+	grid.add_child(Control.new())
+
 	var back := Button.new()
 	back.text = "Back"
 	back.custom_minimum_size = Vector2(0, 42)
@@ -107,6 +116,11 @@ func _on_volume_released(_changed: bool, bus_name: String) -> void:
 func _on_graphics(index: int) -> void:
 	Settings.set_graphics(index)
 	Sfx.ui("confirm")
+
+
+func _on_mist(on: bool) -> void:
+	Settings.set_mist(on)
+	Sfx.ui("click")
 
 
 func _on_language(index: int) -> void:

@@ -21,6 +21,8 @@ var language := "en"
 ## Graphics quality: 0 low, 1 medium, 2 high (particles, dynamic lights,
 ## volumetric fog, shadows). Takes effect when a mission starts.
 var graphics := 2
+## Low white mist drifting over the battlefield (switchable live).
+var mist := true
 const GRAPHICS_LEVELS := ["Low", "Medium", "High"]
 var _tables := {}   # locale -> Translation
 
@@ -93,6 +95,7 @@ func _load() -> void:
 		volumes[b] = clampi(int(cf.get_value("audio", b.to_lower(), BUSES[b])), 0, 100)
 	language = str(cf.get_value("game", "language", "en"))
 	graphics = clampi(int(cf.get_value("video", "quality", 2)), 0, 2)
+	mist = bool(cf.get_value("video", "mist", true))
 
 
 func save() -> void:
@@ -103,6 +106,7 @@ func save() -> void:
 		cf.set_value("audio", b.to_lower(), volumes[b])
 	cf.set_value("game", "language", language)
 	cf.set_value("video", "quality", graphics)
+	cf.set_value("video", "mist", mist)
 	cf.save(PATH)
 
 
@@ -130,6 +134,11 @@ func set_volume(bus_name: String, value: int) -> void:
 
 func set_graphics(level: int) -> void:
 	graphics = clampi(level, 0, 2)
+	changed.emit()
+
+
+func set_mist(on: bool) -> void:
+	mist = on
 	changed.emit()
 
 

@@ -34,7 +34,7 @@ untranslated at runtime.
   (a decal on the ground) and a camera jolt. Rockets trail smoke and fire. Damaged vehicles and
   buildings smoke, and burn when nearly destroyed.
 - **Lights** (`scripts/light_rig.gd`): at night every unit and building lights the battlefield.
-  Vehicles have headlights and tail lights, infantry carry flashlights (Outcasts carry torches,
+  Unit lights are soft, short pools around each unit. Vehicles have headlights and tail lights, infantry carry flashlights (Outcasts carry torches,
   cyborgs have red optics), aircraft blink nav lights and sweep a belly searchlight, hovers glow
   underneath, harvesters and the MCV turn amber beacons. Buildings have floodlights, window glow and
   aviation lights; defense towers sweep searchlights that lock onto their target. Building lights
@@ -45,6 +45,8 @@ untranslated at runtime.
   strikes that light up the whole map, sheet lightning, thunder that arrives late when the strike is
   far, St. Elmo's fire crackling on tall buildings) or distant dry lightning (Mission 2). The glass
   storm's damaging bolts use the same lightning.
+- **Battlefield mist** (Options, on by default, switches instantly): soft white mist banks drifting
+  low over the whole map, lit by the sun and by every light on the field (`shaders/fx/mist.gdshader`).
 - **Graphics quality** in Options (Low / Medium / High, `--graphics=0..2` on the command line): particle
   counts, the number of lights, shadows, and on High volumetric fog at night so light beams hang in
   the air (Medium draws fake beam cones instead). It takes effect at the next mission start.

@@ -116,7 +116,9 @@ static func _accent(fac: String) -> Color:
 
 # ---------------------------------------------------------------- parts
 
-func _spot(pos: Vector3, dir: Vector3, color: Color, energy: float, rng: float, angle: float, cone := false, cone_k := 1.0) -> SpotLight3D:
+## soft: unit lights, a gentle pool that fades from the centre and dies off
+## within a few cells, instead of a hard-edged far-reaching beam.
+func _spot(pos: Vector3, dir: Vector3, color: Color, energy: float, rng: float, angle: float, cone := false, cone_k := 1.0, soft := false) -> SpotLight3D:
 	var l := SpotLight3D.new()
 	l.position = pos
 	l.basis = _aim(dir)
@@ -124,10 +126,10 @@ func _spot(pos: Vector3, dir: Vector3, color: Color, energy: float, rng: float, 
 	l.light_energy = energy * dark
 	l.spot_range = rng
 	l.spot_angle = angle
-	l.spot_angle_attenuation = 1.6
-	l.spot_attenuation = 1.1
-	l.light_specular = 0.8
-	l.light_volumetric_fog_energy = 0.7
+	l.spot_angle_attenuation = 0.55 if soft else 1.6
+	l.spot_attenuation = 1.9 if soft else 1.1
+	l.light_specular = 0.35 if soft else 0.8
+	l.light_volumetric_fog_energy = 0.35 if soft else 0.7
 	l.shadow_enabled = false
 	l.distance_fade_enabled = true
 	l.distance_fade_begin = FADE_BEGIN
@@ -138,14 +140,14 @@ func _spot(pos: Vector3, dir: Vector3, color: Color, energy: float, rng: float, 
 	return l
 
 
-func _omni(pos: Vector3, color: Color, energy: float, rng: float) -> OmniLight3D:
+func _omni(pos: Vector3, color: Color, energy: float, rng: float, soft := false) -> OmniLight3D:
 	var l := OmniLight3D.new()
 	l.position = pos
 	l.light_color = color
 	l.light_energy = energy * dark
 	l.omni_range = rng
-	l.omni_attenuation = 1.4
-	l.light_specular = 0.5
+	l.omni_attenuation = 2.0 if soft else 1.4
+	l.light_specular = 0.25 if soft else 0.5
 	l.shadow_enabled = false
 	l.distance_fade_enabled = true
 	l.distance_fade_begin = FADE_BEGIN
@@ -235,23 +237,23 @@ func _build_infantry(e: Entity, b: AABB) -> void:
 	var model: String = e.def.get("model", "")
 	if fac == "outcast" or model == "brute" or model == "tallow":
 		# a torch held up at shoulder height
-		var tl := _omni(Vector3(0.12, h * 0.9, 0.05), Color(1.0, 0.55, 0.2), 1.8, 4.0)
+		var tl := _omni(Vector3(0.12, h * 0.9, 0.05), Color(1.0, 0.55, 0.2), 1.1, 2.6, true)
 		_flickers.append([tl, tl.light_energy, randf() * 10.0])
 		_lens(tl.position, Color(1.0, 0.5, 0.15), 0.045, 3, 6.0)
 		return
 	if model == "civilian" or model == "scientist" or e.def.get("faction", "") == "creature":
 		return
 	var chest := Vector3(0.07, h * 0.68, b.end.z * 0.6)
-	var fwd := Vector3(0, -0.28, 1)
+	var fwd := Vector3(0, -0.4, 1)
 	if model == "cyborg":
 		# red optics and a narrow red scanning beam
 		_lens(Vector3(0, h * 0.88, b.end.z * 0.5), Color(1.0, 0.1, 0.05), 0.035, 0, 6.0)
 		if Settings.graphics >= 1:
-			_spot(chest, fwd, Color(1.0, 0.3, 0.25), 2.5, 7.0, 14.0, Settings.graphics >= 2, 0.6)
+			_spot(chest, fwd, Color(1.0, 0.3, 0.25), 1.3, 4.0, 22.0, Settings.graphics >= 2, 0.35, true)
 		return
 	_lens(chest, Color(0.9, 0.95, 1.0), 0.03, 0, 5.0)
 	if Settings.graphics >= 1:
-		_spot(chest, fwd, Color(0.86, 0.92, 1.0), 3.2, 8.0, 19.0, Settings.graphics >= 2, 0.55)
+		_spot(chest, fwd, Color(0.86, 0.92, 1.0), 1.6, 4.5, 26.0, Settings.graphics >= 2, 0.35, true)
 
 
 func _build_vehicle(e: Entity, b: AABB) -> void:
@@ -261,7 +263,7 @@ func _build_vehicle(e: Entity, b: AABB) -> void:
 	if e.def.get("cloak", false):
 		return   # stealth tanks run dark
 	if fac == "creature":
-		var g := _omni(Vector3(0, b.size.y * 0.5, 0), Color(0.4, 1.0, 0.55), 2.0, 3.5)
+		var g := _omni(Vector3(0, b.size.y * 0.5, 0), Color(0.4, 1.0, 0.55), 1.4, 2.6, true)
 		_pulses.append([g, g.light_energy, 1.3, randf() * TAU])
 		return
 	var move: String = e.def.get("move", "ground")
@@ -275,14 +277,14 @@ func _build_vehicle(e: Entity, b: AABB) -> void:
 	_lens(Vector3(-half, h, front), Color(1.0, 0.95, 0.85), 0.045, 0, 6.0)
 	_lens(Vector3(half, h, front), Color(1.0, 0.95, 0.85), 0.045, 0, 6.0)
 	if Settings.graphics >= 1 or e.team == G.local_team:
-		var rng := 9.0 + b.size.z * 2.0
-		var spot := _spot(Vector3(0, h, front), Vector3(0, -0.22, 1), col, 6.0, rng, 30.0, false)
+		var rng := 5.0 + b.size.z
+		var spot := _spot(Vector3(0, h, front), Vector3(0, -0.3, 1), col, 2.8, rng, 36.0, false, 1.0, true)
 		# cones from each lamp
 		if use_cones and Settings.graphics >= 1:
 			for sx in [-half, half]:
-				var cn := _cone(rng * 0.5, tan(deg_to_rad(20.0)) * rng * 0.5, col, 0.55)
+				var cn := _cone(rng * 0.45, tan(deg_to_rad(24.0)) * rng * 0.45, col, 0.35)
 				cn.position = Vector3(sx, h, front)
-				cn.basis = _aim(Vector3(0, -0.22, 1)) * Basis.from_scale(Vector3(cn.scale))
+				cn.basis = _aim(Vector3(0, -0.3, 1)) * Basis.from_scale(Vector3(cn.scale))
 				add_child(cn)
 		spot.name = "Headlights"
 	# red tail lights
@@ -290,7 +292,7 @@ func _build_vehicle(e: Entity, b: AABB) -> void:
 	_lens(Vector3(-half * 1.1, h, back), Color(1.0, 0.08, 0.04), 0.035, 0, 4.0)
 	_lens(Vector3(half * 1.1, h, back), Color(1.0, 0.08, 0.04), 0.035, 0, 4.0)
 	if move == "hover":
-		var glow := _omni(Vector3(0, 0.05, 0), Color(0.35, 0.75, 1.0), 2.2, 2.6)
+		var glow := _omni(Vector3(0, 0.05, 0), Color(0.35, 0.75, 1.0), 1.4, 2.0, true)
 		_pulses.append([glow, glow.light_energy, 5.0, randf() * TAU])
 	if model == "harvester" or model == "mcv" or e.def.get("heal", false) or model == "sensor_truck":
 		_beacon(Vector3(0, b.end.y + 0.06, b.position.z + b.size.z * 0.35), Color(1.0, 0.6, 0.1))
@@ -308,17 +310,18 @@ func _build_aircraft(b: AABB, col: Color) -> void:
 	var l := SpotLight3D.new()
 	l.basis = _aim(Vector3(0, -1, 0.6))
 	l.light_color = col.lerp(Color.WHITE, 0.5)
-	l.light_energy = 7.0 * dark
-	l.spot_range = 12.0
-	l.spot_angle = 14.0
-	l.spot_angle_attenuation = 1.5
-	l.light_volumetric_fog_energy = 1.2
+	l.light_energy = 3.2 * dark
+	l.spot_range = 8.0
+	l.spot_angle = 18.0
+	l.spot_angle_attenuation = 0.6
+	l.spot_attenuation = 1.6
+	l.light_volumetric_fog_energy = 0.5
 	l.distance_fade_enabled = true
 	l.distance_fade_begin = FADE_BEGIN
 	l.distance_fade_length = FADE_LENGTH
 	piv.add_child(l)
 	if use_cones and Settings.graphics >= 1:
-		l.add_child(_cone(9.0, tan(deg_to_rad(14.0)) * 9.0, l.light_color, 0.9))
+		l.add_child(_cone(6.0, tan(deg_to_rad(16.0)) * 6.0, l.light_color, 0.5))
 	_search = piv   # swept by _process
 
 
@@ -331,9 +334,11 @@ func _beacon(pos: Vector3, color: Color) -> void:
 	var l := SpotLight3D.new()
 	l.basis = _aim(Vector3(0, -0.35, 1))
 	l.light_color = color
-	l.light_energy = 5.0 * dark
-	l.spot_range = 5.0
-	l.spot_angle = 35.0
+	l.light_energy = 2.4 * dark
+	l.spot_range = 3.5
+	l.spot_angle = 40.0
+	l.spot_angle_attenuation = 0.6
+	l.spot_attenuation = 1.8
 	l.distance_fade_enabled = true
 	l.distance_fade_begin = FADE_BEGIN
 	l.distance_fade_length = FADE_LENGTH
