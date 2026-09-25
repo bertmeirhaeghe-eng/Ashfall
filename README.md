@@ -49,10 +49,20 @@ scripts/ai_controller.gd skirmish AI
 scripts/input_controller.gd selection and orders;  rts_camera.gd  camera
 scripts/hud.gd, overlay.gd, minimap.gd  UI
 scripts/mesh_factory.gd placeholder models (swap for real art using the same metadata contract)
+scripts/prop_library.gd real-art battlefield decoration (blossom trees, derelict ruins)
 scripts/fx.gd, projectile.gd  effects
+assets/models/             imported art used by prop_library.gd (houses, church, cottage, trees)
 ```
 **Tweaking balance:** edit `data/rules.json`. To add a unit, add an entry that references a `model`
 key from `mesh_factory.gd`. It shows up in the sidebar automatically.
+
+**Battlefield decoration:** units and structures are still primitive-mesh placeholders (see below),
+but the environment now uses real imported art via `prop_library.gd`: each flank crystal field's
+blossom tree is a textured tree model (alternating `assets/models/tree` and `assets/models/mapletree`)
+with the original glowing crystal pods kept on top, and a few mirrored derelict ruins
+(`assets/models/house`, `church`, `cottage`) are scattered around the map as impassable scenery.
+`PropLibrary` re-centres and rescales whatever it loads to a target world-space height, so dropping
+in a differently-scaled replacement model just works.
 
 **Exporting:** add `*.json` to *Export → Resources → Filters to export non-resource files*,
 otherwise `rules.json` is left out of the build.
@@ -63,4 +73,5 @@ otherwise `rules.json` is left out of the build.
 - The simulation isn't deterministic yet, so there's no multiplayer. It needs a fixed-point lockstep layer.
 - Units only push each other apart (they don't use RVO avoidance). Large blobs can jostle in chokepoints.
 - No audio yet.
-- Placeholder art: every model is built from primitive meshes.
+- Placeholder art: every unit and structure is still built from primitive meshes. Only the
+  environment dressing (trees, ruins) uses imported real-art models so far.

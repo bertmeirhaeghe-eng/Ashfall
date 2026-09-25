@@ -4,7 +4,7 @@ extends Node3D
 ## the visuals for ground, rocks, blossom trees and crystals.
 ## One cell == one world unit. Cell (x, y) covers world X in [x, x+1), Z in [y, y+1).
 
-enum Terrain { GROUND = 0, ROCK = 1, TREE = 2 }
+enum Terrain { GROUND = 0, ROCK = 1, TREE = 2, RUIN = 3 }
 enum Crystal { NONE = 0, GREEN = 1, BLUE = 2 }
 
 var w := 80
@@ -16,6 +16,8 @@ var occupant: Array = []            # Structure or null per cell
 var crystal_cells := {}             # Vector2i -> true
 var blossoms: Array = []            # Array of Vector2i
 var base_cells: Array = []          # Array of Vector2i, index == team
+var _field_centers: Array = []      # Array of Vector2i, for ruin clearance
+var _ruin_spots: Array = []         # Array of {"cell": Vector2i, "rot": float}
 
 var astar := AStarGrid2D.new()
 var rng := RandomNumberGenerator.new()
@@ -103,6 +105,8 @@ func generate(seed_value: int) -> void:
 	occupant.fill(null)
 	crystal_cells.clear()
 	blossoms.clear()
+	_field_centers.clear()
+	_ruin_spots.clear()
 
 	base_cells = [Vector2i(14, h - 15), mirror(Vector2i(14, h - 15))]
 
@@ -132,8 +136,14 @@ func generate(seed_value: int) -> void:
 	for f in fields:
 		_crystal_field(f[0], f[1], f[2], f[3])
 		_crystal_field(mirror(f[0]), f[1], f[2], f[3])
+		_field_centers.append(f[0])
+		_field_centers.append(mirror(f[0]))
 	# contested blue field in the dead centre (symmetric by construction)
 	_crystal_field(Vector2i(w / 2, h / 2), 2.6, Crystal.BLUE, false)
+	_field_centers.append(Vector2i(w / 2, h / 2))
+
+	# --- derelict ruins (decoration; mirrored for fairness, block movement)
+	_place_ruins()
 
 	# --- pathfinding
 	astar.region = Rect2i(0, 0, w, h)
@@ -195,6 +205,50 @@ func _clear_rocks(center: Vector2i, r: float) -> void:
 					terrain[idx(cc)] = Terrain.GROUND
 
 
+## Scatters a few derelict buildings for battlefield flavour. Sites are
+## mirrored for fairness and kept well clear of bases, crystal fields and the
+## map edge; each stamps a 3x3 patch of Terrain.RUIN so it blocks movement
+## and defense line-of-sight like a rock outcrop does.
+func _place_ruins(count := 3) -> void:
+	var attempts := 0
+	var placed := 0
+	while placed < count and attempts < 200:
+		attempts += 1
+		var c := Vector2i(rng.randi_range(9, w - 10), rng.randi_range(9, h - 10))
+		if not _ruin_site_clear(c):
+			continue
+		_stamp_ruin(c)
+		_stamp_ruin(mirror(c))
+		_ruin_spots.append({"cell": c, "rot": rng.randf_range(0.0, TAU)})
+		_ruin_spots.append({"cell": mirror(c), "rot": rng.randf_range(0.0, TAU)})
+		placed += 1
+
+
+func _ruin_site_clear(c: Vector2i) -> bool:
+	for dx in range(-1, 2):
+		for dy in range(-1, 2):
+			for m in [c + Vector2i(dx, dy), mirror(c + Vector2i(dx, dy))]:
+				if not in_bounds(m) or terrain[idx(m)] != Terrain.GROUND:
+					return false
+	for b in base_cells:
+		if Vector2(c - b).length() < 10.0:
+			return false
+	for f in _field_centers:
+		if Vector2(c - f).length() < 7.0:
+			return false
+	if Vector2(c - Vector2i(w / 2, h / 2)).length() < 8.0:
+		return false
+	return true
+
+
+func _stamp_ruin(c: Vector2i) -> void:
+	for dx in range(-1, 2):
+		for dy in range(-1, 2):
+			var cc := c + Vector2i(dx, dy)
+			if in_bounds(cc):
+				terrain[idx(cc)] = Terrain.RUIN
+
+
 func _crystal_field(center: Vector2i, r: float, kind: int, blossom: bool) -> void:
 	_clear_rocks(center, r + 2.0)
 	var mx := float(_cr.get("green_max", 300)) if kind == Crystal.GREEN else float(_cr.get("blue_max", 600))
@@ -245,7 +299,7 @@ func _ensure_route(a: Vector2i, b: Vector2i) -> void:
 		for off in [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1)]:
 			var c: Vector2i = Vector2i(q) + off
 			for cc in [c, mirror(c)]:
-				if in_bounds(cc) and terrain[idx(cc)] == Terrain.ROCK:
+				if in_bounds(cc) and (terrain[idx(cc)] == Terrain.ROCK or terrain[idx(cc)] == Terrain.RUIN):
 					terrain[idx(cc)] = Terrain.GROUND
 					_refresh_solid(cc)
 
@@ -507,6 +561,7 @@ func _build_visuals() -> void:
 
 	_build_rocks()
 	_build_trees()
+	_build_ruins()
 
 	var shard := CylinderMesh.new()
 	shard.top_radius = 0.0
@@ -581,6 +636,8 @@ func _paint_ground() -> void:
 			var col := Color(0.34 + n, 0.30 + n, 0.25 + n)
 			if terrain[i] == Terrain.ROCK:
 				col = Color(0.2 + n, 0.18 + n, 0.16 + n)
+			elif terrain[i] == Terrain.RUIN:
+				col = Color(0.24 + n, 0.21 + n, 0.18 + n)
 			elif crystal[i] > 0.0:
 				var k := clampf(crystal[i] / _max_for(crystal_kind[i]), 0.2, 1.0)
 				var tint := Color(0.16, 0.32, 0.12) if crystal_kind[i] == Crystal.GREEN else Color(0.12, 0.2, 0.38)
@@ -621,22 +678,22 @@ func _build_rocks() -> void:
 	add_child(mmi)
 
 
+## A blossom tree marks each flank crystal field. It's the real tree model
+## (alternating the plain and maple assets) with the original glowing crystal
+## pods kept on top, since those are the visual cue for the seeding mechanic.
 func _build_trees() -> void:
-	for b in blossoms:
+	for i in blossoms.size():
+		var b: Vector2i = blossoms[i]
 		var root := Node3D.new()
 		root.position = cell_to_world(b)
 		add_child(root)
-		var trunk := MeshInstance3D.new()
-		var tm := CylinderMesh.new()
-		tm.top_radius = 0.12
-		tm.bottom_radius = 0.3
-		tm.height = 1.6
-		trunk.mesh = tm
-		trunk.position.y = 0.8
-		var bark := StandardMaterial3D.new()
-		bark.albedo_color = Color(0.2, 0.25, 0.15)
-		trunk.material_override = bark
-		root.add_child(trunk)
+		var model: Node3D = PropLibrary.maple_tree() if i % 2 == 0 else PropLibrary.tree()
+		if model == null:
+			model = PropLibrary.tree()
+		if model:
+			root.add_child(model)
+		else:
+			_procedural_trunk(root)
 		var pod_mat := StandardMaterial3D.new()
 		pod_mat.albedo_color = Color(0.2, 0.6, 0.2)
 		pod_mat.emission_enabled = true
@@ -649,6 +706,34 @@ func _build_trees() -> void:
 			sm.height = 0.5
 			pod.mesh = sm
 			var a: float = TAU * k / 5.0
-			pod.position = Vector3(cos(a) * 0.35, 1.5 + 0.15 * (k % 2), sin(a) * 0.35)
+			pod.position = Vector3(cos(a) * 0.5, 1.7 + 0.15 * (k % 2), sin(a) * 0.5)
 			pod.material_override = pod_mat
 			root.add_child(pod)
+
+
+## Fallback trunk used only if the real tree assets failed to load.
+func _procedural_trunk(root: Node3D) -> void:
+	var trunk := MeshInstance3D.new()
+	var tm := CylinderMesh.new()
+	tm.top_radius = 0.12
+	tm.bottom_radius = 0.3
+	tm.height = 1.6
+	trunk.mesh = tm
+	trunk.position.y = 0.8
+	var bark := StandardMaterial3D.new()
+	bark.albedo_color = Color(0.2, 0.25, 0.15)
+	trunk.material_override = bark
+	root.add_child(trunk)
+
+
+## Derelict houses/church/cottage scattered per `_place_ruins`, purely for
+## battlefield flavour; the footprint they stamp already blocks movement.
+func _build_ruins() -> void:
+	for spot in _ruin_spots:
+		var c: Vector2i = spot["cell"]
+		var inst := PropLibrary.ruin(rng, 2.0 + rng.randf() * 0.6)
+		if inst == null:
+			continue
+		inst.position = cell_to_world(c)
+		inst.rotation.y = spot["rot"]
+		add_child(inst)
