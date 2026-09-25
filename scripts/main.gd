@@ -162,11 +162,12 @@ func _setup_environment(th: Dictionary) -> void:
 	sun.light_volumetric_fog_energy = 0.15
 	sun.directional_shadow_max_distance = 90.0
 	add_child(sun)
-	# faint cold fill from the opposite side so shadows aren't flat black
+	# cool fill from the opposite side so shadows (and units standing in
+	# them) aren't flat black
 	var fill := DirectionalLight3D.new()
 	fill.rotation_degrees = Vector3(-55, -140, 0)
 	fill.light_color = Color(0.45, 0.5, 0.7)
-	fill.light_energy = 0.25
+	fill.light_energy = 0.4
 	add_child(fill)
 
 	# screen-edge vignette under the HUD

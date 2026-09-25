@@ -195,13 +195,22 @@ def cottage():
     return md
 
 
+def _canopy_hull(mesh):
+    """The source canopy is hundreds of individual disconnected leaf cards;
+    decimating that (as for a normal surface) drops whole cards and leaves a
+    moth-eaten, gappy silhouette. A convex hull instead gives one solid,
+    faceted low-poly crown, in keeping with this project's flat-shaded style
+    (see ashmodel.hull(), used the same way throughout procedural.py)."""
+    return trimesh.convex.convex_hull(mesh.vertices)
+
+
 def tree():
     """Generic forest tree: trunk + canopy parts, drawn as two colour-tinted
     MultiMeshes by map_grid.gd's forest scatter (map_grid.gd _build_forest)."""
     parts = load_env(os.path.join(ENV, "tree.obj"), height=2.1)
     md = Model("tree")
     md.add(parts["trunk"], "body", md.part("trunk", (0, 0, 0)))
-    md.add(parts["canopy"], "body", md.part("canopy", (0, 0, 0)))
+    md.add(_canopy_hull(parts["canopy"]), "body", md.part("canopy", (0, 0, 0)))
     return md
 
 
@@ -211,7 +220,7 @@ def mapletree():
     parts = load_env(os.path.join(ENV, "mapletree.obj"), height=2.6)
     md = Model("mapletree")
     md.add(parts["trunk"], "dark", "body")
-    md.add(parts["canopy"], "foliage", "body")
+    md.add(_canopy_hull(parts["canopy"]), "foliage", "body")
     return md
 
 
