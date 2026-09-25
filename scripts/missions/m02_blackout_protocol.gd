@@ -250,7 +250,7 @@ func _update_power() -> void:
 	var r := power_ratio()
 	if gen_down:
 		r = 0.0
-	set_status("power", "Veil power %d%%" % int(r * 100.0))
+	set_status("power", "Veil power %d%%", [int(r * 100.0)])
 	enemy().defense_rof_mult = 0.5 if r <= 0.75 else 1.0
 	if r <= 0.75 and _last_ratio > 0.75:
 		say("havel", "Veil power is under seventy-five percent. Their defenses are running slow. We're starving them.")

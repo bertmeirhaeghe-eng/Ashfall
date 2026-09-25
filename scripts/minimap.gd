@@ -57,7 +57,7 @@ func _draw() -> void:
 			draw_line(Vector2(0, y), Vector2(size.x, y), Color(0.4, 0.5, 0.45, randf() * 0.3), 1.0)
 		var font := get_theme_default_font()
 		var msg := "RADAR JAMMED" if G.radar_jammed else "NO RADAR"
-		draw_string(font, Vector2(0, size.y * 0.5), msg, HORIZONTAL_ALIGNMENT_CENTER, size.x, 16, Color(1.0, 0.5, 0.3))
+		draw_string(font, Vector2(0, size.y * 0.5), tr(msg), HORIZONTAL_ALIGNMENT_CENTER, size.x, 16, Color(1.0, 0.5, 0.3))
 		_draw_frame()
 		return
 	var cell_px := size / v.size

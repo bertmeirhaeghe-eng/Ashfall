@@ -199,7 +199,7 @@ func _check_squads() -> void:
 
 func _update_gather() -> void:
 	var resolved := squads_found + squads_lost
-	set_text("gather", "Gather the scattered garrison squads (%d/4) and reach the MCV at the rail yard." % squads_found)
+	set_text("gather", "Gather the scattered garrison squads (%d/4) and reach the MCV at the rail yard.", [squads_found])
 	var mcv_ours: bool = is_instance_valid(mcv) and mcv.alive and mcv.team == PLAYER
 	if resolved >= 4 and (mcv_ours or deployed):
 		complete("gather")
@@ -255,7 +255,7 @@ func _check_buses() -> void:
 		if not (is_instance_valid(bus) and bus.alive):
 			bus_state[town] = "lost"
 			lost += 1
-			G.notify(PLAYER, "The %s bus was lost." % town)
+			G.notify(PLAYER, tr("The %s bus was lost.") % town)
 			continue
 		if st == "waiting":
 			if team_near(bus.position, PLAYER, 7.0):
@@ -269,10 +269,10 @@ func _check_buses() -> void:
 				bus.remove_silently()
 				player().credits += 1000
 				saved += 1
-				G.notify(PLAYER, "Civilians from %s are safe (+$1,000)." % town)
+				G.notify(PLAYER, tr("Civilians from %s are safe (+$1,000).") % town)
 			elif bus.order == Unit.Order.IDLE:
 				bus.cmd_move(EVAC)
-	set_text("buses", "Escort the civilian buses out of Hollerdorf, Weissbach and Lenz (%d/3 saved)." % saved)
+	set_text("buses", "Escort the civilian buses out of Hollerdorf, Weissbach and Lenz (%d/3 saved).", [saved])
 	if saved == 3:
 		complete("buses")
 	elif lost > 0:
@@ -294,7 +294,7 @@ func _check_storm_warnings() -> void:
 	for town in TOWNS.keys():
 		var tx: float = TOWNS[town].x
 		if tx - storm.front < 20.0 and tx - storm.front > 0.0 and bus_state[town] == "waiting" and once("warn_" + town):
-			say("havel", "The storm will hit %s in about a minute and a half. Those civilians need an escort." % town)
+			say("havel", "The storm will hit %s in about a minute and a half. Those civilians need an escort.", [town])
 		if storm.front > tx + 2.0 and bus_state[town] == "waiting" and is_instance_valid(buses[town]) and buses[town].alive:
 			buses[town].take_damage(40.0, "laser", null)
 

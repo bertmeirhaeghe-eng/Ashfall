@@ -1,5 +1,5 @@
 extends Control
-## Main menu: New game, Continue game, Quit game.
+## Main menu: New game, Continue game, Options and Quit game.
 ## Command-line hooks for automated tests (after "--"):
 ##   --mission=N      start mission N directly
 ##   --test=NAME      run the scripted test harness (see scripts/dev/test_runner.gd)
@@ -7,10 +7,15 @@ extends Control
 const GOLD := Color(0.85, 0.66, 0.2)
 
 var continue_btn: Button
+var menu_box: VBoxContainer
+var info: Label
+var voice_label: Label
+var options: OptionsPanel
 
 
 func _ready() -> void:
 	get_tree().paused = false
+	Music.stop()
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	if _handle_cmdline():
 		return
@@ -46,39 +51,72 @@ func _ready() -> void:
 	continue_btn = _button("Continue Game")
 	continue_btn.pressed.connect(_on_continue)
 	vb.add_child(continue_btn)
+	var opt_btn := _button("Options")
+	opt_btn.pressed.connect(_on_options)
+	vb.add_child(opt_btn)
 	var quit_btn := _button("Quit Game")
 	quit_btn.pressed.connect(func(): get_tree().quit())
 	vb.add_child(quit_btn)
 
-	var info := Label.new()
+	info = Label.new()
 	info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	info.add_theme_font_size_override("font_size", 13)
 	info.add_theme_color_override("font_color", Color(0.7, 0.75, 0.75))
 	vb.add_child(info)
-	if Campaign.has_save():
-		var m: Dictionary = Campaign.mission_info()
-		info.text = "Saved: Mission %d  -  %s" % [m["id"], m["title"]]
-	else:
-		continue_btn.disabled = true
-		info.text = "No campaign in progress"
-	var vl := Label.new()
-	vl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	vl.add_theme_font_size_override("font_size", 12)
-	match Voice.backend:
-		Voice.Backend.KOKORO:
-			vl.text = "Voices: Kokoro TTS"
-			vl.add_theme_color_override("font_color", Color(0.6, 0.85, 0.65))
-		Voice.Backend.SYSTEM:
-			vl.text = "Voices: system text-to-speech. Install the Kokoro model for neural voices (see README)."
-			vl.add_theme_color_override("font_color", Color(0.8, 0.8, 0.7))
-		_:
-			vl.text = "No text-to-speech available: voices are shown as subtitles. Install the Kokoro model (see README)."
-			vl.add_theme_color_override("font_color", Color(1.0, 0.7, 0.4))
-	vb.add_child(vl)
+	voice_label = Label.new()
+	voice_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	voice_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	voice_label.add_theme_font_size_override("font_size", 12)
+	vb.add_child(voice_label)
+	menu_box = vb
+	continue_btn.disabled = not Campaign.has_save()
+	_refresh_texts()
+	Settings.language_changed.connect(_refresh_texts)
 	new_btn.grab_focus()
 	Voice.stop_all()
 	Voice.say("eva", "Welcome back, Commander.")
+
+
+## The lines built from data; static button and label texts translate themselves.
+func _refresh_texts() -> void:
+	if Campaign.has_save():
+		var m: Dictionary = Campaign.mission_info()
+		info.text = tr("Saved: Mission %d  -  %s") % [m["id"], tr(m["title"])]
+	else:
+		info.text = tr("No campaign in progress")
+	var col := Color(1.0, 0.7, 0.4)
+	match Voice.engine_for(Settings.language):
+		"kokoro", "piper":
+			voice_label.text = tr("Voices: %s") % tr(Voice.backend_name())
+			col = Color(0.6, 0.85, 0.65)
+		"kokoro_nl":
+			voice_label.text = tr("Voices: %s") % tr(Voice.backend_name()) + "\n" \
+				+ tr("Install the Dutch Piper voices for natural Dutch speech (see README).")
+			col = Color(0.8, 0.85, 0.6)
+		"system":
+			voice_label.text = tr("Voices: system text-to-speech. Install the Kokoro model for neural voices (see README).")
+			col = Color(0.8, 0.8, 0.7)
+		_:
+			voice_label.text = tr("No text-to-speech available: voices are shown as subtitles. Install the Kokoro model (see README).")
+	voice_label.add_theme_color_override("font_color", col)
+
+
+func _on_options() -> void:
+	if options:
+		return
+	menu_box.visible = false
+	options = OptionsPanel.new()
+	options.set_anchors_preset(Control.PRESET_CENTER)
+	options.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	options.grow_vertical = Control.GROW_DIRECTION_BOTH
+	add_child(options)
+	options.closed.connect(_on_options_closed)
+
+
+func _on_options_closed() -> void:
+	options = null
+	menu_box.visible = true
+	_refresh_texts()
 
 
 func _spacer(hgt: float) -> Control:

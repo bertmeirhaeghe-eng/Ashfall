@@ -91,6 +91,8 @@ func _impact() -> void:
 	elif is_instance_valid(target) and target.alive:
 		target.take_damage(damage, warhead, src)
 	Fx.impact(target_pos, kind)
+	if kind == "shell" or kind == "rocket":
+		Sfx.play_at("impact", target_pos, -6.0)
 	if G.mission:
 		G.mission.on_impact(target_pos, warhead, src)
 	queue_free()

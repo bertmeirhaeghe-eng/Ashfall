@@ -222,7 +222,12 @@ func tick(delta: float) -> void:
 	_check_stations(0.5)
 	var pct := int(clampf(head / total_len(), 0.0, 1.0) * 100.0)
 	if state != "waiting":
-		set_status("dist", "Pilgrim %d%% of the way%s" % [pct, "  (STOPPED)" if state == "stopped" else ("  (WRECKED)" if state == "wrecked" else "")])
+		var note := ""
+		if state == "stopped":
+			note = "  " + tr("(STOPPED)")
+		elif state == "wrecked":
+			note = "  " + tr("(WRECKED)")
+		set_status("dist", "Pilgrim %d%% of the way%s", [pct, note])
 	if player().count_of("construction_yard") == 0 and all_lost():
 		lose("All forces lost.")
 
@@ -269,7 +274,7 @@ func _run_train(delta: float) -> void:
 			if next_station < station_d.size() and head >= station_d[next_station]:
 				var st: Structure = stations[next_station]
 				if st.team == PLAYER:
-					say("havel", "The Pilgrim is blowing straight through station %d. No fuel, no reinforcements." % (next_station + 1))
+					say("havel", "The Pilgrim is blowing straight through station %d. No fuel, no reinforcements.", [(next_station + 1)])
 				else:
 					state = "station"
 					state_t = 20.0
@@ -376,7 +381,7 @@ func on_captured(s: Entity, _old: int, new_team: int) -> void:
 		ever_held[s] = true
 		var i := stations.find(s)
 		remove_marker("st%d" % i)
-		say("havel", "Water station %d is ours. The Pilgrim won't refuel there, and it'll run twenty percent slower." % (i + 1))
+		say("havel", "Water station %d is ours. The Pilgrim won't refuel there, and it'll run twenty percent slower.", [(i + 1)])
 
 
 func _check_stations(dt: float) -> void:
@@ -408,7 +413,7 @@ func _check_flak() -> void:
 	for i in cars.size():
 		if ROLES[i] == "flak" and not (is_instance_valid(cars[i]) and cars[i].alive):
 			dead += 1
-	set_text("flak", "Destroy the Pilgrim's three flak cars so your Kites can attack it (%d/3)." % dead)
+	set_text("flak", "Destroy the Pilgrim's three flak cars so your Kites can attack it (%d/3).", [dead])
 	if dead >= 3 and is_active("flak"):
 		complete("flak")
 		say("havel", "All three flak cars are scrap. The sky over that train is ours.")

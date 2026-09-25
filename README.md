@@ -8,11 +8,22 @@ soundtrack round it out.
 
 ## Run it
 1. Open Godot 4.7 (4.3 or newer should also work), choose **Import** and select `project.godot`.
-2. Press **F5**. The game starts at the main menu: **New Game**, **Continue Game**, **Quit Game**.
+2. Press **F5**. The game starts at the main menu: **New Game**, **Continue Game**, **Options**, **Quit Game**.
 
 **New Game** plays the spoken prologue, then Mission 1's briefing. Progress is saved at the start of
 every mission (`user://ashfall_campaign.json`), so **Continue Game** returns you to the briefing of the
 mission you reached, with every story choice you have made so far.
+
+## Options: volume and language
+**Options** (main menu, or **Esc** in a mission) has sliders for **music**, **sound effects** and
+**speech** volume, and the **language**: **English** or **Nederlands** (Dutch). Settings are saved
+in `user://ashfall_settings.cfg`. The language changes everything at once: menus, the HUD, tooltips,
+unit and building names, objectives, subtitles, briefings, the story, and all the spoken voices.
+
+Every string is written in English in the code and goes through Godot's `tr()`; the Dutch text lives
+in `data/lang/nl.json` (English -> Dutch). `python3 tools/lang/extract_strings.py --verbose` lists any
+string in the code without a Dutch entry, and the Dutch test runs (below) report any text shown
+untranslated at runtime.
 
 ## Voices (Kokoro TTS)
 Every voice in the game is synthesised at runtime by **[Kokoro TTS](https://huggingface.co/hexgrad/Kokoro-82M)**
@@ -32,6 +43,18 @@ Lines are rendered one at a time in the order they will be spoken (dialogue firs
 pre-rendered in the background on the first run so clicks answer instantly. Dialogue has priority
 over EVA, and EVA over unit chatter.
 
+**Dutch voices (Piper).** In Dutch the characters speak with six Piper voices trained on Dutch
+speech (Flemish and Netherlands Dutch), played through a small extra GDExtension,
+`addons/godot_kokoro/godot_piper.gdextension` (Windows and Linux, source in `piper_src/`). Install them
+once (~390 MB, not in git):
+```
+powershell -ExecutionPolicy Bypass -File tools\get_piper_voices.ps1    # Windows
+bash tools/get_piper_voices.sh                                         # Linux / macOS
+```
+Without them (or on macOS), Dutch is spoken by Kokoro with Dutch pronunciation: understandable, but
+with an accent. For exported builds, copy `addons/godot_kokoro/piper/` to a `piper_voices/` folder
+next to the executable.
+
 **Install the voice model once** (~132 MB, not in git):
 ```
 powershell -ExecutionPolicy Bypass -File tools\get_kokoro_model.ps1     # Windows
@@ -43,10 +66,17 @@ folder next to the game executable. Without the model the game falls back to the
 text-to-speech engine, then to subtitles only; the main menu shows which one is active.
 For testing, `ASHFALL_VOICE=kokoro|system|none` forces a backend.
 
-## Music
-Every track in `music/` plays in shuffled order and loops (`scripts/music.gd`). Drop more
-`.mp3`/`.ogg`/`.wav` files in that folder to extend the soundtrack. Music ducks automatically while
-dialogue is spoken. **M** mutes it, **N** skips to the next track.
+## Music and sound effects
+Every track in `music/` plays in shuffled order and loops (`scripts/music.gd`). The music starts when
+a mission begins (when you get control of your units) and fades out on the mission-end screen; the
+menu and briefings are music-free. Drop more `.mp3`/`.ogg`/`.wav` files in that folder to extend the
+soundtrack. Music ducks automatically while dialogue is spoken. **M** mutes it, **N** skips to the
+next track.
+
+Sound effects (`scripts/sfx.gd`) are synthesised at runtime, so there are no sample files: rifles,
+machine guns, cannons, rockets, lasers, sonic and flame weapons, impacts, explosions, the Halo Lance,
+and interface clicks. World sounds are positional. Music, effects and voices each have their own
+audio bus (`Music`, `Sfx`, `Voice`), which the Options sliders control.
 
 ## The campaign
 | # | Mission | Signature mechanic |
@@ -80,7 +110,7 @@ Tech unlocks follow the design document; each mission's sidebar only offers what
 | H / Space | Jump to home base / to the last alert |
 | O / F1 / P | Objectives / controls help / pause |
 | M / N | Mute music / next track |
-| Esc or F10 | Cancel, deselect, then the game menu (resume, restart mission, main menu, quit) |
+| Esc or F10 | Cancel, deselect, then the game menu (resume, restart mission, options, main menu, quit) |
 | Sidebar | LMB queue or place, RMB cancel; special actions (BLOW THE DAM, Harden network, Halo Lance, DESCEND) appear above Sell / Repair |
 
 ## Project layout
@@ -89,16 +119,22 @@ data/rules.json              all balance data (units, structures, weapons, warhe
 scenes/menu.tscn             main menu (entry point)
 scenes/story.tscn            prologue / briefing / epilogue screen
 scenes/main.tscn             the game; loads the current mission
+scripts/settings.gd          autoload "Settings": volumes, language, translation tables (loaded first)
+data/lang/nl.json            Dutch translation (English text -> Dutch)
 scripts/campaign.gd          autoload "Campaign": mission list, briefings, unlocks, save file, flags
-scripts/voice.gd             autoload "Voice": Kokoro / system TTS, speaker profiles, unit reactions, EVA
-addons/godot_kokoro/         godot-kokoro GDExtension (Kokoro TTS via Sherpa-ONNX); models/ is downloaded
+scripts/voice.gd             autoload "Voice": Kokoro / Piper / system TTS, speaker profiles, unit reactions, EVA
+scripts/sfx.gd               autoload "Sfx": synthesised sound effects
+addons/godot_kokoro/         godot-kokoro GDExtension (Kokoro TTS via Sherpa-ONNX) + godot_piper (Dutch Piper voices);
+                             models/ and piper/ are downloaded
 tools/get_kokoro_model.*     downloads the Kokoro voice model
+tools/get_piper_voices.*     downloads the Dutch Piper voices
+tools/lang/                  translation coverage checks
 scripts/g.gd                 autoload "G": rules, teams, entities, spawning, placement, detection
 scripts/missions/mission.gd  mission base class: objectives, triggers, dialogue, win/lose
 scripts/missions/m01..m10    the ten missions (+ glass_storm.gd, train_car.gd)
 scripts/map_grid.gd          map painter API, terrain (rock, water, forest, city), ground + hover pathing
 scripts/entity.gd, unit.gd, structure.gd, harvester.gd, player_state.gd, ai_controller.gd
-scripts/hud.gd, overlay.gd, minimap.gd, input_controller.gd, ui/*  interface
+scripts/hud.gd, overlay.gd, minimap.gd, input_controller.gd, ui/*  interface (ui/options_panel.gd: Options)
 scripts/music.gd             autoload "Music": shuffled soundtrack from music/
 scripts/mesh_factory.gd      .amdl model loader + primitive models for campaign-only units
 models/, tools/models/       3D models and the generator that builds them
@@ -114,14 +150,19 @@ godot --headless --path . --fixed-fps 30 --quit-after 250000 -- --test=campaign 
 godot --headless --path . --fixed-fps 30 --quit-after 120000 -- --test=smoke      # each mission runs 150 s unattended
 godot --headless --path . --fixed-fps 30 --quit-after 30000  -- --test=m6         # one mission's scripted solution
 godot --path . -- --mission=4                                                     # jump straight into a mission
-ASHFALL_VOICE=kokoro godot --headless --path . -- --test=voice                     # render a line per character with Kokoro
+ASHFALL_VOICE=kokoro godot --headless --path . --fixed-fps 30 --quit-after 50000000 -- --test=voice   # a line per character
+godot --headless --path . --fixed-fps 30 --quit-after 120000 -- --test=smoke --lang=nl --langcheck \
+    | python3 tools/lang/check_runtime.py                                          # Dutch, reports untranslated text
+python3 tools/lang/extract_strings.py --verbose                                    # Dutch entries for every string in the code
 ```
+`--lang=en|nl` (or `ASHFALL_LANG`) forces the language; with `--lang=nl` the voice test uses the Piper voices.
 The scripted solutions take shortcuts (teleporting units, removing targets) but every objective is
 still completed through the mission's own triggers. Test runs never touch your save file.
 
 **Exporting:** `*.json` is already in the export presets' include filter so `rules.json` ships.
 
 ## Known limits
-- Campaign-only units and buildings (engineers, hovers, the Pilgrim, the Choir ...) still use primitive-mesh placeholders. No sound effects yet, only voices and music.
+- Campaign-only units and buildings (engineers, hovers, the Pilgrim, the Choir ...) still use primitive-mesh placeholders. Sound effects are synthesised, not recorded.
+- The Dutch Piper voices need the Windows or Linux build of `godot_piper`; macOS speaks Dutch through Kokoro.
 - No full fog of war; stealth, darkness and the Mission 9 blizzard hide units instead.
 - Flat terrain. Units push each other apart but don't use RVO avoidance.

@@ -191,7 +191,7 @@ func sell() -> void:
 	var refund := float(def.get("cost", 0)) * float(G.game_rule("sell_refund", 0.5)) * (hp / max_hp)
 	p.credits += refund
 	alive = false
-	G.notify(team, "Structure sold (+$%d)" % int(refund))
+	G.notify(team, tr("Structure sold (+$%d)") % int(refund))
 	Fx.explosion(position + Vector3(0, 0.3, 0), 0.8)
 	if G.mission:
 		G.mission._entity_died(self, null)

@@ -232,7 +232,7 @@ func process(delta: float) -> void:
 func _complete(cat: String, def_id: String) -> void:
 	if cat == "structure" or cat == "defense":
 		ready_structure[cat] = def_id
-		G.notify(id, "Construction complete - place %s" % G.def_of(def_id).get("name", def_id))
+		G.notify(id, tr("Construction complete - place %s") % tr(G.def_of(def_id).get("name", def_id)))
 		if id == G.local_team:
 			Voice.eva("Construction complete")
 		return
@@ -255,6 +255,6 @@ func _complete(cat: String, def_id: String) -> void:
 	if goal.x < 0:
 		goal = exit_c + Vector2i(0, 2)
 	u.cmd_move(goal)
-	G.notify(id, "Unit ready: %s" % u.display_name())
+	G.notify(id, tr("Unit ready: %s") % u.display_name())
 	if id == G.local_team:
 		Voice.eva("Unit ready")

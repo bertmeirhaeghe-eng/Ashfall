@@ -173,7 +173,7 @@ func tick(delta: float) -> void:
 		say("okafor", "You're inside the valley. The Control Core is at the north end. Get an Engineer to it.")
 	var relays_left := count_tagged("relay")
 	if is_active("relays"):
-		set_text("relays", "Destroy the three Lance power relays to buy time. Each one adds 5 minutes (%d/3)." % (3 - relays_left))
+		set_text("relays", "Destroy the three Lance power relays to buy time. Each one adds 5 minutes (%d/3).", [(3 - relays_left)])
 		if relays_left == 0:
 			complete("relays")
 	if player().count_of("construction_yard") == 0:
@@ -270,7 +270,7 @@ func on_captured(s: Entity, _old: int, new_team: int) -> void:
 				n += 1
 		if is_active("brigade"):
 			complete("brigade")
-		say("okafor", "Brigade %s's HQ is ours. Their commander just ordered %d units to stand down and report to you." % [b.to_upper(), n])
+		say("okafor", "Brigade %s's HQ is ours. Their commander just ordered %d units to stand down and report to you.", [b.to_upper(), n])
 
 
 func on_unit_built(u: Unit) -> void:

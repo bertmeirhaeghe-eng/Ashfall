@@ -16,9 +16,11 @@ general/text_to_speech=true
 
 [autoload]
 
+Settings="*res://scripts/settings.gd"
 G="*res://scripts/g.gd"
 Voice="*res://scripts/voice.gd"
 Music="*res://scripts/music.gd"
+Sfx="*res://scripts/sfx.gd"
 Campaign="*res://scripts/campaign.gd"
 TestRunner="*res://scripts/dev/test_runner.gd"
 

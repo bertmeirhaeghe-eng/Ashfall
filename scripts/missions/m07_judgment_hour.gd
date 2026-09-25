@@ -159,7 +159,7 @@ func tick(delta: float) -> void:
 	if is_active("spires") and n > 0 and count_tagged("spire") > 0:
 		fail("spires")
 	if is_active("beacons"):
-		set_text("beacons", "Place three Halo Lance targeting beacons (Defense tab) on the marked sites around the Sanctum (%d/3)." % n)
+		set_text("beacons", "Place three Halo Lance targeting beacons (Defense tab) on the marked sites around the Sanctum (%d/3).", [n])
 		if n >= 3:
 			complete("beacons")
 			_start_lock()

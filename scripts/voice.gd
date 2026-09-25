@@ -2,13 +2,21 @@ extends Node
 ## Every in-game voice goes through here (autoload "Voice"): briefings,
 ## mission dialogue, the Bastion EVA and unit reactions.
 ##
-## Backends, in order of preference:
+## Every line is written in English and translated (tr) into the language
+## chosen in Options before it is spoken and subtitled.
+##
+## English, in order of preference:
 ##  1. Kokoro TTS (neural voices) through the godot-kokoro GDExtension in
 ##     addons/godot_kokoro, when its model files are installed. Every character
-##     and unit type has its own Kokoro voice; rendered lines are cached in
-##     user://voice_cache so each line is only synthesised once.
+##     and unit type has its own Kokoro voice.
 ##  2. The platform text-to-speech engine (DisplayServer.tts_*).
 ##  3. Subtitles only, paced by an estimated duration (headless, no engine).
+## Dutch (Nederlands):
+##  1. Piper voices trained on Dutch speech (PiperTTS, addons/godot_kokoro/
+##     godot_piper.gdextension), when the voices are installed.
+##  2. Kokoro reading Dutch phonemes (espeak-ng "nl"): understandable, accented.
+##  3. The platform engine with a Dutch voice, then subtitles only.
+## Rendered lines are cached in user://voice_cache so each is synthesised once.
 
 signal line_started(speaker: String, speaker_name: String, text: String, color: Color)
 signal line_finished(speaker: String)
@@ -199,20 +207,44 @@ const KOKORO_CAST := {
 	"ack_truck": "am_eric", "ack_bus": "af_river", "ack_damper": "bm_daniel", "ack_civilian": "af_bella",
 }
 
+## Dutch through Kokoro: the multi-lang voices that read Dutch phonemes most
+## clearly (measured with a speech recogniser), by gender.
+const KOKORO_NL_F := [35, 28, 42, 5]   # if_sara, ef_dora, pf_dora, af_kore
+const KOKORO_NL_M := [36, 43, 29, 26]  # im_nicola, pm_alex, em_alex, bm_george
+const KOKORO_NL_CAST := {"spk_narrator": 26, "spk_okafor": 28, "spk_havel": 43, "spk_lindqvist": 29,
+	"spk_rourke": 36, "spk_oriel": 42, "spk_kestrel": 35, "spk_sibyl": 35, "spk_tallow": 36, "spk_eva": 28}
+
+## Dutch Piper voices (sherpa-onnx "vits-piper-<name>" packages).
+const PIPER_VOICES := {"dii": "nl_NL-dii-high", "nathalie": "nl_BE-nathalie-medium", "pim": "nl_NL-pim-medium",
+	"ronnie": "nl_NL-ronnie-medium", "miro": "nl_NL-miro-high", "rdh": "nl_BE-rdh-medium"}
+const PIPER_F := ["dii", "nathalie"]
+const PIPER_M := ["pim", "ronnie", "miro", "rdh"]
+## Character -> [Piper voice, pitch]. Six voices play the whole cast, so the
+## pitch shift keeps characters that share a voice apart.
+const PIPER_CAST := {
+	"spk_narrator": ["ronnie", 0.93], "spk_okafor": ["nathalie", 0.96], "spk_havel": ["pim", 1.0],
+	"spk_lindqvist": ["ronnie", 1.06], "spk_rourke": ["miro", 0.9], "spk_oriel": ["dii", 0.94],
+	"spk_kestrel": ["nathalie", 0.88], "spk_sibyl": ["dii", 1.08], "spk_tallow": ["rdh", 0.88],
+	"spk_eva": ["dii", 1.0], "spk_veil_radio": ["miro", 1.0], "spk_pilot": ["ronnie", 1.0],
+	"spk_sergeant": ["pim", 0.92], "spk_civilian": ["nathalie", 1.08], "spk_engineer": ["ronnie", 1.08],
+	"spk_outcast": ["rdh", 0.94],
+}
+
 ## Voices processed through the "choir" effect chain (reverb + chorus).
 const CHOIR_VOICES := ["spk_sibyl", "ack_cyborg"]
 
 ## Where the Kokoro model may live: in the project (editor), next to an exported
 ## executable, or in the user folder.
 const KOKORO_DIRS := ["res://addons/godot_kokoro/models/", "@exe/kokoro_models/", "user://kokoro_models/"]
+const PIPER_DIRS := ["res://addons/godot_kokoro/piper/", "@exe/piper_voices/", "user://piper_voices/"]
 const CACHE_DIR := "user://voice_cache/"
 
 enum Backend { NONE, SYSTEM, KOKORO }
 
-var backend := Backend.NONE
+var backend := Backend.NONE       # English voice engine
 var enabled := false              # a real voice engine is available
-var volume := 80
-var _voices: Array = []           # system TTS: [{id, name}]
+var volume := 100                 # the Voice bus carries the player's speech volume
+var _voices: Array = []           # system TTS: [{id, name, lang}]
 var _voice_cache := {}            # system TTS: profile key -> voice id
 var _queue: Array = []
 var _current: Dictionary = {}
@@ -220,41 +252,87 @@ var _t := 0.0
 var _eva_recent := {}
 var _ack_last := -10.0
 var _utt := 0
+var _want := ""
 
-# Kokoro backend
+# rendered audio (Kokoro / Piper)
 var _kokoro: Node = null
+var _kokoro_nl: Node = null       # a second Kokoro engine set up for Dutch phonemes
+var _kokoro_dir := ""
 var _model_tag := ""
+var _piper_dir := ""
+var _piper: Dictionary = {}       # voice -> PiperTTS
 var _player: AudioStreamPlayer
 var _bus := -1
 var _mem_cache := {}              # cache key -> AudioStreamWAV
-var _gen_id := 0                  # outstanding request (one at a time, so dialogue never waits behind chatter)
+var _gen_busy := false            # one line renders at a time, so dialogue never waits behind chatter
+var _gen_src := ""
+var _gen_id := 0
 var _gen_key := ""
-var _gen_t := 0.0
+var _gen_ms := 0
+var _gen_voice := ""
+var _thread: Thread = null
 var _prewarm: Array = []          # lines to render in the background while idle
 var _failed := {}                 # cache keys the engine could not render
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	var want := OS.get_environment("ASHFALL_VOICE")   # kokoro | system | none (for testing)
+	_want = OS.get_environment("ASHFALL_VOICE")   # kokoro | system | none (for testing)
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--voice="):
-			want = a.get_slice("=", 1)
-		elif a.begins_with("--test=") and want == "":
-			want = "none"   # automated tests run silent unless asked
-	if want != "none" and want != "system" and _init_kokoro():
+			_want = a.get_slice("=", 1)
+		elif a.begins_with("--test=") and _want == "":
+			_want = "none"   # automated tests run silent unless asked
+	if _want != "none" and _want != "system" and _init_kokoro():
 		backend = Backend.KOKORO
-	elif want != "none" and want != "kokoro" and _init_system():
+	elif _want != "none" and _want != "kokoro" and _init_system():
 		backend = Backend.SYSTEM
-	enabled = backend != Backend.NONE
-	print("Voice: using %s" % backend_name())
+	if _want != "none" and _want != "system":
+		_init_piper()
+	enabled = backend != Backend.NONE or _piper_dir != ""
+	if _kokoro or _piper_dir != "":
+		DirAccess.make_dir_recursive_absolute(CACHE_DIR)
+		if engine_for(Settings.language) == "kokoro_nl":
+			_kokoro_nl_engine()
+		_queue_prewarm()
+	Settings.language_changed.connect(_on_language_changed)
+	print("Voice: using %s (Dutch: %s)" % [backend_name("en"), backend_name("nl")])
 
 
-func backend_name() -> String:
-	match backend:
-		Backend.KOKORO: return "Kokoro TTS"
-		Backend.SYSTEM: return "system text-to-speech"
+func _on_language_changed() -> void:
+	stop_all()
+	if engine_for(Settings.language) == "kokoro_nl":
+		_kokoro_nl_engine()
+	_queue_prewarm()
+
+
+## The engine that speaks a language: kokoro | kokoro_nl | piper | system | none
+func engine_for(lang: String) -> String:
+	if lang == "nl":
+		if _piper_dir != "":
+			return "piper"
+		if _kokoro:
+			return "kokoro_nl"
+	elif _kokoro:
+		return "kokoro"
+	if backend != Backend.NONE:
+		return "system"
+	return "none"
+
+
+func backend_name(lang := "") -> String:
+	if lang == "":
+		lang = Settings.language
+	match engine_for(lang):
+		"kokoro": return "Kokoro TTS"
+		"kokoro_nl": return "Kokoro TTS (Dutch pronunciation)"
+		"piper": return "Piper TTS (Dutch voices)"
+		"system": return "system text-to-speech"
 	return "subtitles only"
+
+
+func has_dutch_voices() -> bool:
+	return _piper_dir != ""
 
 
 func _init_system() -> bool:
@@ -262,28 +340,25 @@ func _init_system() -> bool:
 		return false
 	if not DisplayServer.has_feature(DisplayServer.FEATURE_TEXT_TO_SPEECH):
 		return false
-	var all: Array = DisplayServer.tts_get_voices()
-	for v in all:
-		var lang: String = str(v.get("language", ""))
-		if lang.begins_with("en") or lang == "":
-			_voices.append({"id": v.get("id", ""), "name": str(v.get("name", "")).to_lower()})
-	if _voices.is_empty():
-		for v in all:
-			_voices.append({"id": v.get("id", ""), "name": str(v.get("name", "")).to_lower()})
+	for v in DisplayServer.tts_get_voices():
+		_voices.append({"id": v.get("id", ""), "name": str(v.get("name", "")).to_lower(), "lang": str(v.get("language", "")).to_lower()})
 	return not _voices.is_empty()
 
 
-# ---------------------------------------------------------------- Kokoro setup
+# ---------------------------------------------------------------- Kokoro / Piper setup
+
+func _abs_dir(d: String) -> String:
+	var p := d
+	if p.begins_with("@exe/"):
+		p = OS.get_executable_path().get_base_dir().path_join(p.substr(5))
+	else:
+		p = ProjectSettings.globalize_path(p)
+	return p if p.ends_with("/") else p + "/"
+
 
 func _find_kokoro_dir() -> String:
 	for d in KOKORO_DIRS:
-		var p: String = d
-		if p.begins_with("@exe/"):
-			p = OS.get_executable_path().get_base_dir().path_join(p.substr(5))
-		else:
-			p = ProjectSettings.globalize_path(p)
-		if not p.ends_with("/"):
-			p += "/"
+		var p := _abs_dir(d)
 		var has_model := FileAccess.file_exists(p + "model.int8.onnx") or FileAccess.file_exists(p + "model.onnx")
 		if has_model and FileAccess.file_exists(p + "voices.bin") and FileAccess.file_exists(p + "tokens.txt") \
 				and DirAccess.dir_exists_absolute(p + "espeak-ng-data"):
@@ -291,44 +366,97 @@ func _find_kokoro_dir() -> String:
 	return ""
 
 
+func _load_kokoro(dir: String, lang: String) -> Node:
+	var model := dir + ("model.int8.onnx" if FileAccess.file_exists(dir + "model.int8.onnx") else "model.onnx")
+	var lexicon := ""
+	if lang == "en" and FileAccess.file_exists(dir + "lexicon-us-en.txt"):
+		lexicon = dir + "lexicon-us-en.txt"
+	var dict := dir + "dict" if DirAccess.dir_exists_absolute(dir + "dict") else ""
+	var tts: Node = ClassDB.instantiate("TextToSpeech")
+	tts.name = "Kokoro_" + lang
+	add_child(tts)
+	tts.set("max_sentences", 1)   # Kokoro renders one sentence batch at a time anyway
+	var code := "nl" if lang == "nl" else ("en-us" if lexicon != "" else "")
+	tts.call("load_model", model, dir + "voices.bin", dir + "tokens.txt", dir + "espeak-ng-data", lexicon, dict, code)
+	if not tts.call("is_model_loaded"):
+		tts.queue_free()
+		return null
+	tts.connect("generation_completed", _on_generated.bind(tts.name))
+	tts.connect("generation_failed", _on_generation_failed.bind(tts.name))
+	return tts
+
+
 func _init_kokoro() -> bool:
 	if not ClassDB.class_exists("TextToSpeech"):
 		return false
-	var dir := _find_kokoro_dir()
-	if dir == "":
+	_kokoro_dir = _find_kokoro_dir()
+	if _kokoro_dir == "":
 		print("Voice: godot-kokoro is installed but no Kokoro model was found (see tools/get_kokoro_model).")
 		return false
-	var model := dir + ("model.int8.onnx" if FileAccess.file_exists(dir + "model.int8.onnx") else "model.onnx")
-	var lexicon := dir + "lexicon-us-en.txt" if FileAccess.file_exists(dir + "lexicon-us-en.txt") else ""
-	var dict := dir + "dict" if DirAccess.dir_exists_absolute(dir + "dict") else ""
-	var tts: Node = ClassDB.instantiate("TextToSpeech")
-	tts.name = "Kokoro"
-	add_child(tts)
-	tts.set("max_sentences", 1)   # Kokoro renders one sentence batch at a time anyway
-	tts.call("load_model", model, dir + "voices.bin", dir + "tokens.txt", dir + "espeak-ng-data", lexicon, dict, "en-us" if lexicon != "" else "")
-	if not tts.call("is_model_loaded"):
-		tts.queue_free()
+	var tts := _load_kokoro(_kokoro_dir, "en")
+	if tts == null:
 		return false
 	if int(tts.call("get_speaker_count")) < 28:
 		push_warning("Voice: this Kokoro model has only %d voices; use kokoro-multi-lang v1.0 for the full cast." % int(tts.call("get_speaker_count")))
 	_kokoro = tts
-	_model_tag = model.get_file() + str(int(tts.call("get_speaker_count")))
-	tts.connect("generation_completed", _on_generated)
-	tts.connect("generation_failed", _on_generation_failed)
+	_model_tag = _kokoro_dir.get_base_dir().get_file() + str(int(tts.call("get_speaker_count")))
 	_setup_audio()
-	DirAccess.make_dir_recursive_absolute(CACHE_DIR)
-	_queue_prewarm()
 	return true
+
+
+## Kokoro reading Dutch needs its own engine (Dutch phonemes, no English lexicon);
+## it is only loaded when Dutch is spoken without the Piper voices.
+func _kokoro_nl_engine() -> Node:
+	if _kokoro_nl == null and _kokoro_dir != "":
+		_kokoro_nl = _load_kokoro(_kokoro_dir, "nl")
+		if _kokoro_nl == null:
+			_kokoro_dir = ""
+	return _kokoro_nl
+
+
+func _piper_model(dir: String, voice: String) -> PackedStringArray:
+	var n: String = PIPER_VOICES[voice]
+	for sub in ["vits-piper-" + n + "/", n + "/"]:
+		if FileAccess.file_exists(dir + sub + n + ".onnx") and FileAccess.file_exists(dir + sub + "tokens.txt"):
+			var data := dir + "espeak-ng-data"
+			if not DirAccess.dir_exists_absolute(data):
+				data = dir + sub + "espeak-ng-data"
+			if DirAccess.dir_exists_absolute(data):
+				return PackedStringArray([dir + sub + n + ".onnx", dir + sub + "tokens.txt", data])
+	return PackedStringArray()
+
+
+func _init_piper() -> void:
+	if not ClassDB.class_exists("PiperTTS"):
+		return
+	for d in PIPER_DIRS:
+		var p := _abs_dir(d)
+		var found := 0
+		for v in PIPER_VOICES.keys():
+			if not _piper_model(p, v).is_empty():
+				found += 1
+		if found > 0:
+			_piper_dir = p
+			break
+	if _piper_dir != "":
+		_setup_audio()
+
+
+func _piper_available(voice: String) -> bool:
+	return not _piper_model(_piper_dir, voice).is_empty()
 
 
 ## A "Voice" bus: pitch shift for character colour, reverb + chorus for SIBYL.
 func _setup_audio() -> void:
+	if _player:
+		return
 	_bus = AudioServer.get_bus_index("Voice")
 	if _bus < 0:
 		AudioServer.add_bus()
 		_bus = AudioServer.bus_count - 1
 		AudioServer.set_bus_name(_bus, "Voice")
 		AudioServer.set_bus_send(_bus, "Master")
+	if AudioServer.get_bus_effect_count(_bus) < 3:
 		AudioServer.add_bus_effect(_bus, AudioEffectPitchShift.new(), 0)
 		var rev := AudioEffectReverb.new()
 		rev.room_size = 0.7
@@ -345,6 +473,10 @@ func _setup_audio() -> void:
 ## Unit reactions and EVA lines are rendered in the background once and cached,
 ## so they play instantly when you click.
 func _queue_prewarm() -> void:
+	_prewarm.clear()
+	var eng := engine_for(Settings.language)
+	if eng == "system" or eng == "none":
+		return
 	for k in EVA_SPEECH.keys():
 		_prewarm.append(_make_item("eva", EVA_SPEECH[k], Prio.EVA, "spk_eva", SPEAKERS["eva"], false))
 	for set_key in ACKS.keys():
@@ -355,14 +487,38 @@ func _queue_prewarm() -> void:
 
 
 func _kokoro_voice(voice_key: String, gender: String) -> int:
-	var name: String = KOKORO_CAST.get(voice_key, "")
-	if name == "":
-		name = "af_sarah" if gender == "f" else "am_michael"
-	return int(KOKORO_IDS.get(name, 0))
+	var vname: String = KOKORO_CAST.get(voice_key, "")
+	if vname == "":
+		vname = "af_sarah" if gender == "f" else "am_michael"
+	return int(KOKORO_IDS.get(vname, 0))
+
+
+func _kokoro_nl_voice(voice_key: String, gender: String) -> int:
+	if KOKORO_NL_CAST.has(voice_key):
+		return KOKORO_NL_CAST[voice_key]
+	var pool: Array = KOKORO_NL_F if gender == "f" else KOKORO_NL_M
+	return pool[absi(hash(voice_key)) % pool.size()]
+
+
+## [voice, pitch] for a character or unit set in Dutch.
+func _piper_voice(voice_key: String, gender: String, pitch: float) -> Array:
+	var pick: Array = PIPER_CAST.get(voice_key, [])
+	if pick.is_empty():
+		var pool: Array = PIPER_F if gender == "f" else PIPER_M
+		pick = [pool[absi(hash(voice_key)) % pool.size()], clampf(1.0 + (pitch - 1.0) * 0.3, 0.88, 1.12)]
+	var v: String = pick[0]
+	if not _piper_available(v):
+		# fall back to any installed voice of the same gender, then any voice
+		var pool: Array = (PIPER_F if PIPER_F.has(v) else PIPER_M) + PIPER_F + PIPER_M
+		for alt in pool:
+			if _piper_available(alt):
+				v = alt
+				break
+	return [v, pick[1]]
 
 
 func _cache_key(item: Dictionary) -> String:
-	return "%s|%d|%.2f|%s" % [_model_tag, item["sid"], item["speed"], item["text"]]
+	return "%s|%s|%.2f|%s" % [item["engine_tag"], str(item["sid"]), item["speed"], item["text"]]
 
 
 func _cache_path(key: String) -> String:
@@ -381,34 +537,88 @@ func _cached(key: String) -> AudioStreamWAV:
 	return null
 
 
-func _on_generated(request_id: int, audio: AudioStreamWAV) -> void:
-	if request_id != _gen_id:
-		return
-	_gen_id = 0
-	if audio == null:
-		_failed[_gen_key] = true
-		return
+func _store(audio: AudioStreamWAV) -> void:
 	_mem_cache[_gen_key] = audio
 	audio.save_to_wav(_cache_path(_gen_key))
 
 
-func _on_generation_failed(request_id: int, error: String) -> void:
-	if request_id == _gen_id:
+func _on_generated(request_id: int, audio: AudioStreamWAV, src: String) -> void:
+	if not _gen_busy or src != _gen_src or request_id != _gen_id:
+		return
+	_gen_busy = false
+	if audio == null:
+		_failed[_gen_key] = true
+		return
+	_store(audio)
+
+
+func _on_generation_failed(request_id: int, error: String, src: String) -> void:
+	if _gen_busy and src == _gen_src and request_id == _gen_id:
 		push_warning("Voice: Kokoro could not render a line: " + error)
 		_failed[_gen_key] = true
-		_gen_id = 0
+		_gen_busy = false
+
+
+## Runs on a worker thread: loads the Piper voice on first use, renders the line.
+func _piper_job(tts: RefCounted, paths: PackedStringArray, text: String, speed: float) -> PackedByteArray:
+	if not tts.call("is_loaded"):
+		if not tts.call("load_model", paths[0], paths[1], paths[2], 2):
+			return PackedByteArray()
+	return tts.call("generate", text, speed, 0)
+
+
+func _finish_piper() -> void:
+	var bytes: PackedByteArray = _thread.wait_to_finish()
+	_thread = null
+	_gen_busy = false
+	if bytes.is_empty():
+		_failed[_gen_key] = true
+		return
+	var wav := AudioStreamWAV.new()
+	wav.format = AudioStreamWAV.FORMAT_16_BITS
+	wav.mix_rate = int(_piper[_gen_voice].call("get_sample_rate"))
+	wav.stereo = false
+	wav.data = bytes
+	_store(wav)
+
+
+func _start_render(pick: Dictionary) -> void:
+	_gen_key = pick["key"]
+	_gen_ms = Time.get_ticks_msec()
+	_gen_src = ""
+	match pick["engine"]:
+		"piper":
+			var v: String = pick["sid"]
+			if not _piper.has(v):
+				_piper[v] = ClassDB.instantiate("PiperTTS")
+			_gen_voice = v
+			_gen_busy = true
+			_gen_src = "piper"
+			_thread = Thread.new()
+			_thread.start(_piper_job.bind(_piper[v], _piper_model(_piper_dir, v), pick["text"], pick["speed"]))
+		"kokoro", "kokoro_nl":
+			var tts: Node = _kokoro if pick["engine"] == "kokoro" else _kokoro_nl_engine()
+			if tts == null:
+				_failed[_gen_key] = true
+				return
+			tts.set("speaker_id", pick["sid"])
+			tts.set("speed", pick["speed"])
+			_gen_src = tts.name
+			_gen_id = int(tts.call("speak_async", pick["text"]))
+			_gen_busy = _gen_id != 0
+			if not _gen_busy:
+				_failed[_gen_key] = true
 
 
 ## Keeps exactly one line rendering: the line being played first, then the queue
 ## in speaking order, then background pre-rendering.
-func _pump_generation(delta: float) -> void:
-	if _kokoro == null:
-		return
-	if _gen_id != 0:
-		_gen_t += delta
-		if _gen_t > 30.0:   # engine stuck: give up on this line
+func _pump_generation() -> void:
+	if _thread and not _thread.is_alive():
+		_finish_piper()
+	if _gen_busy:
+		if Time.get_ticks_msec() - _gen_ms > 30000 and _gen_src != "piper":   # engine stuck: give up on this line
 			_failed[_gen_key] = true
-			_gen_id = 0
+			_gen_busy = false
 		return
 	var wants: Array = []
 	if not _current.is_empty():
@@ -416,7 +626,7 @@ func _pump_generation(delta: float) -> void:
 	wants.append_array(_queue)
 	var pick: Dictionary = {}
 	for it in wants:
-		if it.get("audio") == null and not _failed.has(it["key"]):
+		if it.get("rendered", false) and it.get("audio") == null and not _failed.has(it["key"]):
 			if _cached(it["key"]):
 				it["audio"] = _cached(it["key"])
 			else:
@@ -428,24 +638,22 @@ func _pump_generation(delta: float) -> void:
 			if _cached(pw["key"]) == null and not _failed.has(pw["key"]):
 				pick = pw
 				break
-	if pick.is_empty():
-		return
-	_kokoro.set("speaker_id", pick["sid"])
-	_kokoro.set("speed", pick["speed"])
-	_gen_key = pick["key"]
-	_gen_t = 0.0
-	_gen_id = int(_kokoro.call("speak_async", pick["text"]))
-	if _gen_id == 0:
-		_failed[_gen_key] = true
+	if not pick.is_empty():
+		_start_render(pick)
+
+
+func _exit_tree() -> void:
+	if _thread:
+		_thread.wait_to_finish()
 
 
 # ---------------------------------------------------------------- system TTS voice pick
 
 const FEMALE_HINTS := ["zira", "hazel", "susan", "samantha", "karen", "victoria", "moira", "tessa", "fiona",
 	"female", "woman", "eva", "catherine", "jenny", "aria", "linda", "heather", "helena", "ava", "allison",
-	"serena", "kate", "libby", "sonia", "michelle", "emma", "+f"]
+	"serena", "kate", "libby", "sonia", "michelle", "emma", "colette", "fenna", "claire", "ellen", "+f"]
 const MALE_HINTS := ["david", "mark", "george", "alex", "daniel", "fred", "tom", "male", "guy", "ryan", "james",
-	"richard", "sean", "oliver", "arthur", "aaron", "ralph", "william", "brian", "+m"]
+	"richard", "sean", "oliver", "arthur", "aaron", "ralph", "william", "brian", "frank", "maarten", "arnaud", "+m"]
 
 
 func _is_female(n: String) -> bool:
@@ -464,25 +672,36 @@ func _is_male(n: String) -> bool:
 	return false
 
 
-func _voice_for(key: String, gender: String) -> String:
-	if _voice_cache.has(key):
-		return _voice_cache[key]
-	var cands: Array = []
+func _voice_for(key: String, gender: String, lang: String) -> String:
+	var ck := lang + "|" + key
+	if _voice_cache.has(ck):
+		return _voice_cache[ck]
+	var langs: Array = []
 	for v in _voices:
+		if v["lang"].begins_with(lang):
+			langs.append(v)
+	if langs.is_empty() and lang != "en":
+		for v in _voices:
+			if v["lang"].begins_with("en") or v["lang"] == "":
+				langs.append(v)
+	if langs.is_empty():
+		langs = _voices
+	var cands: Array = []
+	for v in langs:
 		if (gender == "f" and _is_female(v["name"])) or (gender == "m" and _is_male(v["name"])):
 			cands.append(v["id"])
 	if cands.is_empty():
-		for v in _voices:
+		for v in langs:
 			cands.append(v["id"])
 	var id: String = cands[absi(hash(key)) % cands.size()]
-	_voice_cache[key] = id
+	_voice_cache[ck] = id
 	return id
 
 
 # ---------------------------------------------------------------- public API
 
 func speaker_name(key: String) -> String:
-	return SPEAKERS.get(key, {}).get("name", key.capitalize())
+	return tr(SPEAKERS.get(key, {}).get("name", key.capitalize()))
 
 
 func speaker_color(key: String) -> Color:
@@ -490,11 +709,27 @@ func speaker_color(key: String) -> Color:
 
 
 func _make_item(speaker: String, text: String, prio: int, voice_key: String, prof: Dictionary, subtitle: bool) -> Dictionary:
-	var item := {"speaker": speaker, "name": prof.get("name", ""), "text": _clean(text), "prio": prio,
+	var lang: String = Settings.language
+	var engine := engine_for(lang)
+	var item := {"speaker": speaker, "name": tr(prof.get("name", "")), "text": _clean(tr(text)), "prio": prio,
 		"voice_key": voice_key, "gender": prof["gender"], "pitch": prof["pitch"], "rate": prof["rate"],
-		"color": prof.get("color", Color.WHITE), "subtitle": subtitle, "audio": null}
-	item["sid"] = _kokoro_voice(voice_key, prof["gender"])
+		"color": prof.get("color", Color.WHITE), "subtitle": subtitle, "audio": null, "lang": lang,
+		"engine": engine, "rendered": engine == "kokoro" or engine == "kokoro_nl" or engine == "piper"}
 	item["speed"] = clampf(float(prof["rate"]), 0.8, 1.25)
+	item["shift"] = clampf(1.0 + (float(prof["pitch"]) - 1.0) * 0.25, 0.85, 1.15)
+	match engine:
+		"piper":
+			var pv := _piper_voice(voice_key, prof["gender"], float(prof["pitch"]))
+			item["sid"] = pv[0]
+			item["shift"] = pv[1]
+			item["speed"] = clampf(float(prof["rate"]), 0.85, 1.15)
+			item["engine_tag"] = "piper-" + PIPER_VOICES[pv[0]]
+		"kokoro_nl":
+			item["sid"] = _kokoro_nl_voice(voice_key, prof["gender"])
+			item["engine_tag"] = _model_tag + "-nl"
+		_:
+			item["sid"] = _kokoro_voice(voice_key, prof["gender"])
+			item["engine_tag"] = _model_tag
 	item["key"] = _cache_key(item)
 	return item
 
@@ -506,6 +741,7 @@ func say(speaker: String, text: String) -> void:
 
 
 ## EVA announcement; dropped while dialogue is playing and de-duplicated.
+## `msg` is the English message (see EVA_SPEECH); what is spoken is translated.
 func eva(msg: String) -> void:
 	var spoken := ""
 	for k in EVA_SPEECH.keys():
@@ -580,11 +816,10 @@ func skip_current() -> void:
 
 
 func _stop_audio() -> void:
-	match backend:
-		Backend.SYSTEM:
-			DisplayServer.tts_stop()
-		Backend.KOKORO:
-			_player.stop()
+	if backend == Backend.SYSTEM:
+		DisplayServer.tts_stop()
+	if _player:
+		_player.stop()
 
 
 # ---------------------------------------------------------------- queue
@@ -622,17 +857,18 @@ func _next() -> void:
 	_t = 0.0
 	_current["est"] = estimate(_current["text"], _current["rate"])
 	_current["started"] = false
-	if backend == Backend.KOKORO:
+	_current["queued_ms"] = Time.get_ticks_msec()
+	if _current["rendered"]:
 		if _current.get("audio") == null:
 			var c := _cached(_current["key"])
 			if c:
 				_current["audio"] = c
-		_try_start_kokoro()
+		_try_start_audio()
 		return
-	if backend == Backend.SYSTEM:
+	if _current["engine"] == "system":
 		_utt += 1
-		var vid := _voice_for(_current["voice_key"], _current["gender"])
-		DisplayServer.tts_speak(_current["text"], vid, volume, _current["pitch"], _current["rate"], _utt, false)
+		var vid := _voice_for(_current["voice_key"], _current["gender"], _current["lang"])
+		DisplayServer.tts_speak(_current["text"], vid, int(Settings.volumes["Voice"]), _current["pitch"], _current["rate"], _utt, false)
 	_begin_line()
 
 
@@ -643,14 +879,14 @@ func _begin_line() -> void:
 		line_started.emit(_current["speaker"], _current["name"], _current["text"], _current["color"])
 
 
-## Plays the current line once Kokoro has rendered it.
-func _try_start_kokoro() -> void:
+## Plays the current line once Kokoro / Piper has rendered it.
+func _try_start_audio() -> void:
 	var audio = _current.get("audio")
 	if audio == null:
 		return
 	var choir: bool = CHOIR_VOICES.has(_current["voice_key"])
 	var shift := AudioServer.get_bus_effect(_bus, 0) as AudioEffectPitchShift
-	shift.pitch_scale = clampf(1.0 + (float(_current["pitch"]) - 1.0) * 0.25, 0.85, 1.15)
+	shift.pitch_scale = float(_current["shift"])
 	AudioServer.set_bus_effect_enabled(_bus, 0, absf(shift.pitch_scale - 1.0) > 0.01)
 	AudioServer.set_bus_effect_enabled(_bus, 1, choir)
 	AudioServer.set_bus_effect_enabled(_bus, 2, choir)
@@ -658,6 +894,12 @@ func _try_start_kokoro() -> void:
 	_player.stream = audio
 	_player.play()
 	_begin_line()
+
+
+## Real seconds the current line has been waiting for its audio (rendering runs
+## in real time, whatever the game clock does).
+func _waited() -> float:
+	return (Time.get_ticks_msec() - int(_current.get("queued_ms", 0))) / 1000.0
 
 
 func _finish_current() -> void:
@@ -670,36 +912,35 @@ func _finish_current() -> void:
 
 
 func _process(delta: float) -> void:
-	_pump_generation(delta)
+	_pump_generation()
 	if _current.is_empty():
 		return
 	_t += delta
 	var est: float = _current["est"]
 	var done := false
-	match backend:
-		Backend.KOKORO:
-			if not _current["started"]:
-				if _current.get("audio") != null:
-					_try_start_kokoro()
-				elif _failed.has(_current["key"]) or _t > (1.5 if _current["prio"] == Prio.ACK else 12.0):
-					# could not render in time: chatter is dropped, dialogue falls back to subtitles
-					if _current["prio"] == Prio.ACK:
-						_current = {}
-						_next()
-						return
-					_current["audio"] = null
-					_begin_line()
-					_current["silent"] = true
-			elif _current.get("silent", false):
-				done = _t >= est
-			else:
-				done = _t > 0.1 and not _player.playing
-		Backend.SYSTEM:
-			if _t > 0.4 and not DisplayServer.tts_is_speaking():
-				done = true
-			elif _t > est * 2.5 + 3.0:
-				done = true
-		_:
+	if _current["rendered"]:
+		if not _current["started"]:
+			if _current.get("audio") != null:
+				_try_start_audio()
+			elif _failed.has(_current["key"]) or _waited() > (1.5 if _current["prio"] == Prio.ACK else 15.0):
+				# could not render in time: chatter is dropped, dialogue falls back to subtitles
+				if _current["prio"] == Prio.ACK:
+					_current = {}
+					_next()
+					return
+				_current["audio"] = null
+				_begin_line()
+				_current["silent"] = true
+		elif _current.get("silent", false):
 			done = _t >= est
+		else:
+			done = _t > 0.1 and not _player.playing
+	elif _current["engine"] == "system":
+		if _t > 0.4 and not DisplayServer.tts_is_speaking():
+			done = true
+		elif _t > est * 2.5 + 3.0:
+			done = true
+	else:
+		done = _t >= est
 	if done:
 		_finish_current()

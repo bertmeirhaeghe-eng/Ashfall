@@ -1,0 +1,19 @@
+; PiperTTS: Dutch Piper (VITS) voices for Ashfall through the sherpa-onnx C API
+; shipped with godot-kokoro in bin/. Source: addons/godot_kokoro/piper_src (MIT).
+; Built for Windows and Linux; on other platforms Dutch falls back to Kokoro.
+[configuration]
+entry_symbol = "godot_piper_library_init"
+compatibility_minimum = "4.1"
+reloadable = false
+
+[libraries]
+windows.debug.x86_64 = "res://addons/godot_kokoro/bin/godot_piper.windows.template_debug.x86_64.dll"
+windows.release.x86_64 = "res://addons/godot_kokoro/bin/godot_piper.windows.template_release.x86_64.dll"
+linux.debug.x86_64 = "res://addons/godot_kokoro/bin/libgodot_piper.linux.template_debug.x86_64.so"
+linux.release.x86_64 = "res://addons/godot_kokoro/bin/libgodot_piper.linux.template_release.x86_64.so"
+
+[dependencies]
+windows.debug.x86_64 = {"res://addons/godot_kokoro/bin/sherpa-onnx-c-api.dll": "", "res://addons/godot_kokoro/bin/onnxruntime.dll": "", "res://addons/godot_kokoro/bin/onnxruntime_providers_shared.dll": ""}
+windows.release.x86_64 = {"res://addons/godot_kokoro/bin/sherpa-onnx-c-api.dll": "", "res://addons/godot_kokoro/bin/onnxruntime.dll": "", "res://addons/godot_kokoro/bin/onnxruntime_providers_shared.dll": ""}
+linux.debug.x86_64 = {"res://addons/godot_kokoro/bin/libsherpa-onnx-c-api.so": "", "res://addons/godot_kokoro/bin/libonnxruntime.so": ""}
+linux.release.x86_64 = {"res://addons/godot_kokoro/bin/libsherpa-onnx-c-api.so": "", "res://addons/godot_kokoro/bin/libonnxruntime.so": ""}

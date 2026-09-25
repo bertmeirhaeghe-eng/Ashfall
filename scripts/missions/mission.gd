@@ -15,13 +15,13 @@ const BASTION_BLUE := Color(0.2, 0.5, 1.0)
 const VEIL_RED := Color(0.9, 0.15, 0.1)
 
 var number := 1
-var objectives: Array = []       # [{id, text, kind, state, visible}]
+var objectives: Array = []       # [{id, text, args, kind, state, visible}]; text is English, shown translated
 var ended := false
 var won := false
 var auto_win := true             # win as soon as every primary objective is done
 var pending_flags := {}          # campaign flags written only if the mission is won
 var markers: Array = []          # [{pos, color, label, node}]
-var timers := {}                 # key -> {"text": String, "t": float, "visible": bool}
+var timers := {}                 # key -> {"text": String, "args": Array, "t": float}
 var start_credits := 5000
 var lance_single_use := false
 var time := 0.0
@@ -162,7 +162,7 @@ func enable_harden() -> void:
 
 func update_harden() -> void:
 	var cd := harden_ready_t - time
-	G.hud.set_special("harden", "Harden network (30s)" if cd <= 0.0 else "Harden recharging %ds" % int(cd), cd <= 0.0)
+	G.hud.set_special("harden", tr("Harden network (30s)") if cd <= 0.0 else tr("Harden recharging %ds") % int(cd), cd <= 0.0)
 
 
 ## Networked units become immune to SIBYL hijacking for 30 seconds.
@@ -213,11 +213,22 @@ func enemy() -> PlayerState:
 
 ## survive = "keep X alive" style objective: completes automatically on victory.
 func add_objective(id: String, text: String, kind := "primary", visible := true, survive := false) -> void:
-	objectives.append({"id": id, "text": text, "kind": kind, "state": "active", "visible": visible, "survive": survive})
+	objectives.append({"id": id, "text": text, "args": [], "kind": kind, "state": "active", "visible": visible, "survive": survive})
 	if visible and G.hud:
 		G.hud.refresh_objectives()
 		if time > 1.0:
-			G.notify(PLAYER, "New objective: " + text, true)
+			_new_objective_notice(objectives[-1])
+
+
+## The objective as shown to the player, in the chosen language.
+func objective_text(o: Dictionary) -> String:
+	var args: Array = o.get("args", [])
+	return tr(o["text"]) % args if not args.is_empty() else tr(o["text"])
+
+
+func _new_objective_notice(o: Dictionary) -> void:
+	G.notify(PLAYER, tr("New objective: %s") % objective_text(o))
+	Voice.eva("New objective")
 
 
 func obj(id: String) -> Dictionary:
@@ -231,14 +242,17 @@ func reveal(id: String) -> void:
 	var o := obj(id)
 	if not o.is_empty() and not o["visible"]:
 		o["visible"] = true
-		G.notify(PLAYER, "New objective: " + o["text"], true)
+		_new_objective_notice(o)
 		G.hud.refresh_objectives()
 
 
-func set_text(id: String, text: String) -> void:
+## Changes an objective's text; `text` may be a format string filled with `args`
+## (translated first, then formatted).
+func set_text(id: String, text: String, args: Array = []) -> void:
 	var o := obj(id)
-	if not o.is_empty() and o["text"] != text:
+	if not o.is_empty() and (o["text"] != text or o.get("args", []) != args):
 		o["text"] = text
+		o["args"] = args
 		if G.hud:
 			G.hud.refresh_objectives()
 
@@ -261,8 +275,8 @@ func complete(id: String) -> void:
 		return
 	o["state"] = "done"
 	o["visible"] = true
-	var label := "Bonus objective complete" if o["kind"] == "bonus" else "Objective complete"
-	G.notify(PLAYER, "%s: %s" % [label, o["text"]])
+	var label := tr("Bonus objective complete") if o["kind"] == "bonus" else tr("Objective complete")
+	G.notify(PLAYER, "%s: %s" % [label, objective_text(o)])
 	Voice.eva("Objective complete")
 	G.hud.refresh_objectives()
 
@@ -272,7 +286,7 @@ func fail(id: String) -> void:
 	if o.is_empty() or o["state"] != "active" or ended:
 		return
 	o["state"] = "failed"
-	G.notify(PLAYER, "Objective failed: %s" % o["text"])
+	G.notify(PLAYER, tr("Objective failed: %s") % objective_text(o))
 	Voice.eva("Objective failed")
 	G.hud.refresh_objectives()
 
@@ -289,8 +303,10 @@ func primaries_done() -> bool:
 
 # ================================================================ dialogue & events
 
-func say(speaker: String, text: String) -> void:
-	Voice.say(speaker, text)
+## A dialogue line. `text` is English; with `args` it is a format string that is
+## translated first and filled in afterwards.
+func say(speaker: String, text: String, args: Array = []) -> void:
+	Voice.say(speaker, tr(text) % args if not args.is_empty() else text)
 
 
 func say_once(key: String, speaker: String, text: String) -> void:
@@ -311,13 +327,13 @@ func after(sec: float, f: Callable) -> void:
 	_events.append({"t": time + sec, "f": f})
 
 
-func set_timer(key: String, text: String, secs: float) -> void:
-	timers[key] = {"text": text, "t": secs}
+func set_timer(key: String, text: String, secs: float, args: Array = []) -> void:
+	timers[key] = {"text": text, "args": args, "t": secs}
 
 
 ## A status line in the timer bar without a clock.
-func set_status(key: String, text: String) -> void:
-	timers[key] = {"text": text, "t": -1.0}
+func set_status(key: String, text: String, args: Array = []) -> void:
+	timers[key] = {"text": text, "args": args, "t": -1.0}
 
 
 func clear_timer(key: String) -> void:
@@ -474,6 +490,7 @@ func win() -> void:
 	for k in pending_flags.keys():
 		Campaign.set_flag(k, pending_flags[k])
 	Campaign.mission_won()
+	Music.stop()
 	if G.controller:
 		G.controller.cancel_mode()
 	Voice.stop_all()
@@ -489,6 +506,7 @@ func lose(reason: String) -> void:
 		return
 	ended = true
 	G.game_over = true
+	Music.stop()
 	if G.controller:
 		G.controller.cancel_mode()
 	Voice.stop_all()

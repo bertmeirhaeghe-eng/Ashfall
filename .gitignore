@@ -6,3 +6,7 @@ __pycache__/
 addons/godot_kokoro/models/*
 !addons/godot_kokoro/models/.gdignore
 !addons/godot_kokoro/models/GET_THE_MODEL.md
+# Dutch Piper voices are downloaded separately (see addons/godot_kokoro/piper/GET_THE_VOICES.md)
+addons/godot_kokoro/piper/*
+!addons/godot_kokoro/piper/.gdignore
+!addons/godot_kokoro/piper/GET_THE_VOICES.md

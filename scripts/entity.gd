@@ -125,7 +125,7 @@ func set_selected(v: bool) -> void:
 
 
 func display_name() -> String:
-	return def.get("name", def_id)
+	return tr(def.get("name", def_id))
 
 
 ## Distance from a point to this entity's outer edge (ground plane).
@@ -245,6 +245,7 @@ func fire(t: Entity) -> void:
 	if def.get("cloak", false):
 		decloak_until = G.elapsed + 1.5
 	var kind: String = weapon.get("projectile", "tracer")
+	Sfx.weapon(kind, from, dmg)
 	if kind == "laser" or kind == "none":
 		var hit := t.position + Vector3(0, t.hit_height(), 0)
 		if kind == "laser":
@@ -300,7 +301,9 @@ func die(killer: Entity = null) -> void:
 	hp = 0.0
 	if is_instance_valid(killer) and killer.alive and G.is_enemy(killer.team, team):
 		killer.add_kill()
-	Fx.explosion(position + Vector3(0, 0.3, 0), 1.6 if is_structure else (0.6 if armor == "infantry" else 1.0))
+	var boom := 1.6 if is_structure else (0.6 if armor == "infantry" else 1.0)
+	Fx.explosion(position + Vector3(0, 0.3, 0), boom)
+	Sfx.explosion(position, boom)
 	if G.mission:
 		G.mission._entity_died(self, killer)
 	on_removed()
@@ -355,7 +358,9 @@ func add_kill() -> void:
 	if new_rank > rank:
 		set_rank(new_rank)
 		var rank_names: Array = ["Rookie", "Veteran", "Elite"]
-		G.notify(team, "Unit promoted: %s" % rank_names[rank], true)
+		G.notify(team, tr("Unit promoted: %s") % tr(rank_names[rank]))
+		if team == G.local_team:
+			Voice.eva("Unit promoted")
 
 
 func set_rank(r: int) -> void:

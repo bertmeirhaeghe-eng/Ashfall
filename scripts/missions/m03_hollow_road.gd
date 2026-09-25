@@ -250,7 +250,7 @@ func on_entity_died(e: Entity, _killer: Entity) -> void:
 		say_once("spores", "havel", "Spore cloud! Anyone on foot near those trees is choking on glass.")
 	if e.team == ENEMY and e.tags.has("maw_hit") and time - float(e.tags["maw_hit"]) < 2.0:
 		maw_kills += 1
-		set_text("maw", "Lure a Veil patrol into the Maw (%d/3)." % mini(maw_kills, 3))
+		set_text("maw", "Lure a Veil patrol into the Maw (%d/3).", [mini(maw_kills, 3)])
 		if maw_kills >= 3 and is_active("maw"):
 			complete("maw")
 			spawn(["outcast_brute", "outcast_brute"], PLAYER, ROUTE_WP[mini(wp_i, ROUTE_WP.size() - 1)])
@@ -297,7 +297,7 @@ func _drive_convoy() -> void:
 			t.remove_silently()
 			escaped += 1
 			_update_convoy_text()
-			say("havel", "A truck got through! That's %d." % escaped)
+			say("havel", "A truck got through! That's %d.", [escaped])
 			if escaped >= 3:
 				lose("Three convoy trucks escaped with the Codex data.")
 				return
@@ -323,7 +323,7 @@ func _drive_convoy() -> void:
 
 
 func _update_convoy_text() -> void:
-	set_text("convoy", "Stop the Veil convoy before it leaves the map (%d/5 trucks stopped, %d escaped)." % [destroyed, escaped])
+	set_text("convoy", "Stop the Veil convoy before it leaves the map (%d/5 trucks stopped, %d escaped).", [destroyed, escaped])
 
 
 func _check_caches() -> void:

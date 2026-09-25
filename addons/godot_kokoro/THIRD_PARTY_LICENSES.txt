@@ -74,3 +74,20 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 Source: https://github.com/hexgrad/kokoro
+
+================================================================================
+godot_piper (PiperTTS GDExtension)
+================================================================================
+
+Written for Ashfall, MIT licensed; source in addons/godot_kokoro/piper_src.
+Links the sherpa-onnx C API (Apache License 2.0) shipped in bin/ with godot-kokoro,
+and godot-cpp (MIT, https://github.com/godotengine/godot-cpp).
+
+================================================================================
+Dutch Piper voices (downloaded separately, not in git)
+================================================================================
+
+nl_BE-nathalie-medium, nl_NL-dii-high, nl_NL-pim-medium, nl_NL-ronnie-medium,
+nl_NL-miro-high and nl_BE-rdh-medium from https://github.com/rhasspy/piper
+(converted for sherpa-onnx by k2-fsa). Each voice folder carries its own
+MODEL_CARD with the dataset and license details.

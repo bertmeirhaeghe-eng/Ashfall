@@ -24,6 +24,7 @@ func _ready() -> void:
 	backdrop = SkyBackdrop.new()
 	add_child(backdrop)
 	Voice.stop_all()
+	Music.stop()
 	Voice.line_started.connect(_on_line_started)
 	Voice.queue_empty.connect(_on_all_spoken)
 
@@ -124,9 +125,9 @@ func _ready() -> void:
 			backdrop.tint = Color(0.75, 0.8, 0.85)
 		_:
 			var m: Dictionary = Campaign.mission_info()
-			header.text = "%s   //   MISSION %d OF %d   //   BRIEFING: %s" % [m["act"].to_upper(), m["id"], Campaign.MISSIONS.size(), m["briefing_by"]]
-			title.text = m["title"]
-			place.text = "%s   -   %s" % [m["place"], m["time"]]
+			header.text = tr("%s   //   MISSION %d OF %d   //   BRIEFING: %s") % [tr(m["act"]).to_upper(), m["id"], Campaign.MISSIONS.size(), tr(m["briefing_by"])]
+			title.text = tr(m["title"])
+			place.text = "%s   -   %s" % [tr(m["place"]), tr(m["time"])]
 			lines = Campaign.briefing_lines()
 			start_btn.text = "Begin Mission"
 			backdrop.intensity = 0.35
@@ -138,7 +139,7 @@ func _ready() -> void:
 				var ol := RichTextLabel.new()
 				ol.bbcode_enabled = true
 				ol.fit_content = true
-				ol.text = "[color=#d9a833][b]OBJECTIVES[/b][/color]\n\n" + "\n".join(PackedStringArray(objs))
+				ol.text = "[color=#d9a833][b]%s[/b][/color]\n\n" % tr("OBJECTIVES") + "\n".join(PackedStringArray(objs))
 				op.add_child(ol)
 	start_btn.grab_focus()
 	_play()
@@ -159,7 +160,7 @@ func _objectives_preview(m: Dictionary) -> Array:
 				"primary": col = "#9cf29f"
 				"secondary": col = "#8ccff5"
 				"bonus": col = "#f2d06b"
-			out.append("[color=%s]%s:[/color] %s\n" % [col, str(o[0]).capitalize(), o[1]])
+			out.append("[color=%s]%s:[/color] %s\n" % [col, tr(str(o[0]).capitalize()), tr(o[1])])
 	if inst is Node:
 		inst.free()
 	return out
@@ -207,7 +208,7 @@ func _draw_portrait() -> void:
 	var font := get_theme_default_font()
 	if int(Time.get_ticks_msec() / 600) % 2 == 0:
 		portrait.draw_circle(Vector2(16, 16), 5, Color(1, 0.25, 0.2))
-	portrait.draw_string(font, Vector2(26, 21), "LIVE", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(1, 0.4, 0.35))
+	portrait.draw_string(font, Vector2(26, 21), tr("LIVE"), HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(1, 0.4, 0.35))
 	portrait.draw_rect(Rect2(Vector2.ZERO, s), GOLD.darkened(0.3), false, 1.0)
 
 

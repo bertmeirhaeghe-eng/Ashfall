@@ -107,7 +107,7 @@ func begin() -> void:
 	add_objective("lindqvist", "Dr. Lindqvist must survive.", "primary", true, true)
 	add_objective("outpost", "Destroy the Veil research outpost harvesting the bloom's blue crystal.", "secondary")
 	add_objective("blue", "Collect $10,000 in Blue Vitrium from the bloom ($0).", "bonus")
-	set_status("bloom", "Bloom radius %d" % int(radius))
+	set_status("bloom", "Bloom radius %d", [int(radius)])
 	focus(BASE + Vector2i(6, -2))
 	after(3.0, func(): say("lindqvist", "There it is. Look at it grow. Inhibitor pylons can be built further out than normal buildings, Commander. Chain them towards the heart and keep them powered."))
 	after(14.0, func(): say("havel", "Careful with the blue crystal. It's worth double, but one stray shell and the whole field goes up."))
@@ -251,7 +251,7 @@ func tick(delta: float) -> void:
 		_bloom_t = 1.0
 		_grow_bloom()
 		_crystallize(1.0)
-		set_status("bloom", "Bloom radius %d%s" % [int(radius), "  (ACCELERATING)" if samples >= 3 else ""])
+		set_status("bloom", "Bloom radius %d%s", [int(radius), ("  " + tr("(ACCELERATING)")) if samples >= 3 else ""])
 	_hazard_t -= delta
 	if _hazard_t <= 0.0:
 		_hazard_t = 0.5
@@ -269,7 +269,7 @@ func tick(delta: float) -> void:
 	for s in _inhibitors():
 		n += 1
 	if is_active("pylons"):
-		set_text("pylons", "Build Inhibitor Pylons (Defense tab) to push a safe path through the bloom (%d/3). Keep the crystal away from the Construction Yard." % mini(n, 3))
+		set_text("pylons", "Build Inhibitor Pylons (Defense tab) to push a safe path through the bloom (%d/3). Keep the crystal away from the Construction Yard.", [mini(n, 3)])
 		if n >= 3:
 			complete("pylons")
 			say("lindqvist", "The pylons are holding it! Now make me a road to the centre.")
@@ -278,7 +278,7 @@ func tick(delta: float) -> void:
 		say("havel", "The Veil outpost is gone. Nobody else is mining this bloom tonight.")
 	var blue := player().blue_refined
 	if is_active("blue"):
-		set_text("blue", "Collect $10,000 in Blue Vitrium from the bloom ($%d)." % int(blue))
+		set_text("blue", "Collect $10,000 in Blue Vitrium from the bloom ($%d).", [int(blue)])
 		if blue >= 10000.0:
 			complete("blue")
 			pending_flags["resonator_x"] = true
@@ -304,7 +304,7 @@ func _sampling(delta: float) -> void:
 				sampling[i] = -1.0
 				samples += 1
 				remove_marker("spot%d" % i)
-				set_text("samples", "Escort Dr. Lindqvist to the heart of the bloom and collect three resonance samples (%d/3)." % samples)
+				set_text("samples", "Escort Dr. Lindqvist to the heart of the bloom and collect three resonance samples (%d/3).", [samples])
 				if samples < 3:
 					say("lindqvist", ["Sample one. It's warm, Commander. Crystal shouldn't be warm.", "Sample two. The resonance is off every chart I have."][samples - 1])
 				else:
