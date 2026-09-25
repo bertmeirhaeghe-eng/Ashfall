@@ -68,6 +68,9 @@ func _ready() -> void:
 	hud.name = "HUD"
 	add_child(hud)
 	G.hud = hud
+	var cursor := Cursor3D.new()
+	cursor.name = "Cursor3D"
+	add_child(cursor)
 	mission.begin()
 	hud.refresh_objectives()
 	Music.start()   # the player has control from here on
