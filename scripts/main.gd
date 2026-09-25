@@ -3,6 +3,8 @@ extends Node3D
 ## environment, map, players, camera, HUD and hands control to the mission.
 
 var mission: Mission
+var env: Environment
+var sun: DirectionalLight3D
 
 
 func _ready() -> void:
@@ -36,13 +38,20 @@ func _ready() -> void:
 	fx.name = "Fx"
 	add_child(fx)
 	G.fx_root = fx
+	var vfx := Vfx.new()
+	vfx.name = "Vfx"
+	fx.add_child(vfx)
 
 	var cam := RTSCamera.new()
 	cam.name = "Camera"
 	cam.bounds = Rect2(4, 4, map.w - 8, map.h - 8)
 	add_child(cam)
 	G.camera = cam
-	_setup_weather(th.get("weather", "none"), cam)
+	var weather := Weather.new()
+	weather.name = "Weather"
+	add_child(weather)
+	G.weather = weather
+	weather.setup(th.get("weather", "none"), th.get("storm", ""), env, sun, cam)
 
 	var ctl := InputController.new()
 	ctl.name = "Input"
@@ -66,10 +75,22 @@ func _ready() -> void:
 		TestRunner.attach(mission)
 
 
+## How dark the mission is (0 day .. 1 night): the theme's "lights" key, else
+## guessed from the sun and ambient light. Drives unit and building lights.
+static func darkness_of(th: Dictionary) -> float:
+	if th.has("lights"):
+		return clampf(float(th["lights"]), 0.0, 1.0)
+	var sun_e := float(th.get("sun_energy", 1.45))
+	var amb := float(th.get("ambient", 0.55))
+	return clampf((1.15 - sun_e) * 1.1 + (0.6 - amb) * 0.8, 0.0, 1.0)
+
+
 func _setup_environment(th: Dictionary) -> void:
 	# Tiberian Sun-style grading: filmic tone curve, heavy haze, cool fill light
 	# and a vignette. Each mission's theme sets the sky, sun, fog and ambient.
-	var env := Environment.new()
+	G.darkness = darkness_of(th)
+	var q: int = Settings.graphics
+	env = Environment.new()
 	env.background_mode = Environment.BG_SKY
 	var sky := Sky.new()
 	var sm := ProceduralSkyMaterial.new()
@@ -104,8 +125,22 @@ func _setup_environment(th: Dictionary) -> void:
 	env.fog_sky_affect = 0.6
 	env.fog_height = 0.4
 	env.fog_height_density = 0.06
-	env.ssao_enabled = true
+	env.ssao_enabled = q >= 1
 	env.ssao_intensity = 2.2
+	LightRig.use_cones = true
+	if q >= 2 and G.darkness >= 0.5:
+		LightRig.use_cones = false
+		# at night the lights hang in the air: headlight and searchlight shafts,
+		# glowing halos round the floodlights, lightning filling the haze
+		env.volumetric_fog_enabled = true
+		env.volumetric_fog_density = 0.006
+		env.volumetric_fog_albedo = (th.get("fog_color", Color(0.5, 0.38, 0.27)) as Color).lerp(Color(0.8, 0.8, 0.85), 0.5)
+		env.volumetric_fog_length = 70.0
+		env.volumetric_fog_detail_spread = 1.5
+		env.volumetric_fog_gi_inject = 0.0
+		env.volumetric_fog_anisotropy = 0.35
+		env.volumetric_fog_ambient_inject = 0.15
+		env.volumetric_fog_sky_affect = 0.0
 	env.adjustment_enabled = true
 	env.adjustment_brightness = 0.97
 	env.adjustment_contrast = 1.12
@@ -114,13 +149,14 @@ func _setup_environment(th: Dictionary) -> void:
 	we.environment = env
 	add_child(we)
 
-	var sun := DirectionalLight3D.new()
+	sun = DirectionalLight3D.new()
 	sun.name = "Sun"
 	sun.rotation_degrees = th.get("sun_rot", Vector3(-34, 40, 0))
 	sun.light_color = th.get("sun_color", Color(1.0, 0.7, 0.42))
 	sun.light_energy = th.get("sun_energy", 1.45)
-	sun.shadow_enabled = true
+	sun.shadow_enabled = q >= 1 or G.darkness < 0.5
 	sun.shadow_blur = 1.5
+	sun.light_volumetric_fog_energy = 0.15
 	sun.directional_shadow_max_distance = 90.0
 	add_child(sun)
 	# faint cold fill from the opposite side so shadows aren't flat black
@@ -141,98 +177,6 @@ func _setup_environment(th: Dictionary) -> void:
 	vr.material = vm
 	vl.add_child(vr)
 	add_child(vl)
-
-
-## Screen-space weather that follows the camera (rain, snow, ash, crystal spores).
-func _setup_weather(kind: String, cam: RTSCamera) -> void:
-	if kind == "none" or kind == "":
-		return
-	var p := GPUParticles3D.new()
-	p.name = "Weather"
-	p.amount = 900 if kind == "rain" or kind == "snow" else 350
-	p.lifetime = 2.0 if kind == "rain" else 5.0
-	p.visibility_aabb = AABB(Vector3(-40, -30, -40), Vector3(80, 60, 80))
-	var pm := ParticleProcessMaterial.new()
-	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
-	pm.emission_box_extents = Vector3(30, 1, 30)
-	var quad := QuadMesh.new()
-	var qm := StandardMaterial3D.new()
-	qm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	qm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	qm.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	match kind:
-		"rain":
-			pm.direction = Vector3(0.1, -1, 0)
-			pm.spread = 2.0
-			pm.initial_velocity_min = 22.0
-			pm.initial_velocity_max = 26.0
-			pm.gravity = Vector3(0, -10, 0)
-			quad.size = Vector2(0.03, 0.6)
-			qm.albedo_color = Color(0.6, 0.7, 0.85, 0.45)
-		"snow":
-			pm.direction = Vector3(0.6, -1, 0.2)
-			pm.spread = 25.0
-			pm.initial_velocity_min = 5.0
-			pm.initial_velocity_max = 9.0
-			pm.gravity = Vector3(1.5, -2, 0)
-			quad.size = Vector2(0.12, 0.12)
-			qm.albedo_color = Color(0.95, 0.97, 1.0, 0.85)
-		"ash":
-			pm.direction = Vector3(0.3, -1, 0.1)
-			pm.spread = 30.0
-			pm.initial_velocity_min = 2.0
-			pm.initial_velocity_max = 4.0
-			pm.gravity = Vector3(0.5, -1, 0)
-			quad.size = Vector2(0.035, 0.035)
-			qm.albedo_color = Color(0.5, 0.9, 0.55, 0.5)
-		_:
-			pm.direction = Vector3(0, 1, 0)
-			pm.spread = 60.0
-			pm.initial_velocity_min = 0.3
-			pm.initial_velocity_max = 0.8
-			pm.gravity = Vector3(0, 0.2, 0)
-			pm.emission_box_extents = Vector3(30, 6, 30)
-			quad.size = Vector2(0.04, 0.04)
-			qm.albedo_color = Color(0.4, 1.0, 0.6, 0.7)
-	if kind != "rain":
-		qm.albedo_texture = _soft_dot()
-		pm.turbulence_enabled = true
-		pm.turbulence_noise_strength = 0.5
-		pm.turbulence_noise_scale = 6.0
-		quad.size *= 1.8
-	quad.material = qm
-	p.process_material = pm
-	p.draw_pass_1 = quad
-	p.position = Vector3(0, 16 if kind != "spores" else 2, 0)
-	cam.add_child(p)
-	if kind == "ash":
-		# a few glowing embers drifting through the ash
-		var embers := p.duplicate() as GPUParticles3D
-		embers.amount = 60
-		var eq := QuadMesh.new()
-		eq.size = Vector2(0.05, 0.05)
-		var eqm := qm.duplicate() as StandardMaterial3D
-		eqm.albedo_color = Color(1.0, 0.55, 0.15, 0.9)
-		eqm.emission_enabled = true
-		eqm.emission = Color(1.0, 0.45, 0.1)
-		eqm.emission_energy_multiplier = 3.0
-		eq.material = eqm
-		embers.draw_pass_1 = eq
-		cam.add_child(embers)
-
-
-func _soft_dot() -> Texture2D:
-	var dot := GradientTexture2D.new()
-	dot.width = 32
-	dot.height = 32
-	dot.fill = GradientTexture2D.FILL_RADIAL
-	dot.fill_from = Vector2(0.5, 0.5)
-	dot.fill_to = Vector2(0.5, 0.0)
-	var dg := Gradient.new()
-	dg.set_color(0, Color(1, 1, 1, 1))
-	dg.set_color(1, Color(1, 1, 1, 0))
-	dot.gradient = dg
-	return dot
 
 
 func _physics_process(delta: float) -> void:

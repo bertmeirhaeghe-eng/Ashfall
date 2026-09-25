@@ -11,6 +11,7 @@ var kind := "tracer"
 var shooter: Entity = null
 var weapon_splash := 0.0
 var _life := 4.0
+var _trails: Array = []       # particle trails, left behind to fade on impact
 
 
 func launch(from: Vector3, t: Entity, w: Dictionary, dmg: float, src: Entity) -> void:
@@ -62,6 +63,35 @@ func launch(from: Vector3, t: Entity, w: Dictionary, dmg: float, src: Entity) ->
 	mi.material_override = m
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(mi)
+	_add_trails(dmg)
+
+
+func _add_trails(dmg: float) -> void:
+	if Vfx.inst == null or not Vfx.near_camera(position, 12.0):
+		return
+	match kind:
+		"rocket":
+			_trails.append(Vfx.inst.make_trail("rocket", self, 40, 1.4))
+			_trails.append(Vfx.inst.make_trail("rocket_fire", self, 16, 0.12))
+			_glow(Color(1.0, 0.6, 0.25), 2.0, 3.0)
+		"flame":
+			_trails.append(Vfx.inst.make_trail("burn_fire", self, 14, 0.3))
+			_glow(Color(1.0, 0.5, 0.15), 2.5, 3.5)
+		"shell":
+			if dmg >= 60.0:
+				_trails.append(Vfx.inst.make_trail("rocket", self, 18, 0.7))
+		"sonic":
+			_glow(Color(0.5, 0.8, 1.0), 1.5, 2.5)
+	_trails = _trails.filter(func(t): return t != null)
+
+
+func _glow(color: Color, energy: float, rng: float) -> void:
+	var l := OmniLight3D.new()
+	l.light_color = color
+	l.light_energy = energy
+	l.omni_range = rng
+	l.shadow_enabled = false
+	add_child(l)
 
 
 func _physics_process(delta: float) -> void:
@@ -78,8 +108,6 @@ func _physics_process(delta: float) -> void:
 	position += dir * step
 	if absf(dir.y) < 0.99:
 		look_at(position + dir, Vector3.UP)
-	if kind == "rocket" and randf() < 0.6:
-		Fx.puff(position - dir * 0.15)
 
 
 func _impact() -> void:
@@ -91,6 +119,9 @@ func _impact() -> void:
 	elif is_instance_valid(target) and target.alive:
 		target.take_damage(damage, warhead, src)
 	Fx.impact(target_pos, kind)
+	for t in _trails:
+		Vfx.inst.release_trail(t)
+	_trails.clear()
 	if kind == "shell" or kind == "rocket":
 		Sfx.play_at("impact", target_pos, -6.0)
 	if G.mission:

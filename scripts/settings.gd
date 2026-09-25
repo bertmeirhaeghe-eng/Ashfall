@@ -18,6 +18,10 @@ const BUSES := {"Music": 70, "Sfx": 80, "Voice": 90}
 
 var volumes := {"Music": 70, "Sfx": 80, "Voice": 90}
 var language := "en"
+## Graphics quality: 0 low, 1 medium, 2 high (particles, dynamic lights,
+## volumetric fog, shadows). Takes effect when a mission starts.
+var graphics := 2
+const GRAPHICS_LEVELS := ["Low", "Medium", "High"]
 var _tables := {}   # locale -> Translation
 
 
@@ -38,6 +42,8 @@ func _ready() -> void:
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--lang="):
 			language = a.get_slice("=", 1)
+		if a.begins_with("--graphics="):
+			graphics = clampi(int(a.get_slice("=", 1)), 0, 2)
 	var env := OS.get_environment("ASHFALL_LANG")
 	if env != "":
 		language = env
@@ -86,6 +92,7 @@ func _load() -> void:
 	for b in BUSES.keys():
 		volumes[b] = clampi(int(cf.get_value("audio", b.to_lower(), BUSES[b])), 0, 100)
 	language = str(cf.get_value("game", "language", "en"))
+	graphics = clampi(int(cf.get_value("video", "quality", 2)), 0, 2)
 
 
 func save() -> void:
@@ -95,6 +102,7 @@ func save() -> void:
 	for b in BUSES.keys():
 		cf.set_value("audio", b.to_lower(), volumes[b])
 	cf.set_value("game", "language", language)
+	cf.set_value("video", "quality", graphics)
 	cf.save(PATH)
 
 
@@ -117,6 +125,11 @@ func has_language(code: String) -> bool:
 func set_volume(bus_name: String, value: int) -> void:
 	volumes[bus_name] = clampi(value, 0, 100)
 	_apply()
+	changed.emit()
+
+
+func set_graphics(level: int) -> void:
+	graphics = clampi(level, 0, 2)
 	changed.emit()
 
 

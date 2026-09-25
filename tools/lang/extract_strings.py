@@ -33,7 +33,7 @@ def is_text(s):
         return False
     return True
 
-NOT_UI = {"GeometryInstance3D", "AMDL", "PanelContainer", "Button", "Label", "RichTextLabel", "ProgressBar",
+NOT_UI = {"GeometryInstance3D", "MeshInstance3D", "AMDL", "PanelContainer", "Button", "Label", "RichTextLabel", "ProgressBar",
           "English", "Nederlands", "Player", "--langcheck", "Hollerdorf", "Weissbach", "Lenz", "MCV", "Voice", "Music", "Sfx", "Master", "Map", "World", "Fx", "Camera", "Input", "HUD", "Mission", "Sun",
           "Weather", "Kokoro", "PiperTTS", "TextToSpeech", "Harden", "Kokoro TTS", "ASHFALL"}
 

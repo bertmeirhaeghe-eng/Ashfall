@@ -54,6 +54,10 @@ func _run(m: Mission) -> void:
 	if mode.begins_with("shot"):
 		var secs := float(mode.get_slice(":", 1)) if mode.contains(":") else 4.0
 		await _wait_time(m, secs)
+		if OS.get_cmdline_user_args().has("--fxdemo"):
+			await _fx_demo(m)
+		elif OS.get_cmdline_user_args().has("--fxboom"):
+			await _fx_boom(m)
 		await _save_shot("mission%d" % m.number)
 		get_tree().quit(0)
 		return
@@ -107,6 +111,54 @@ func _run(m: Mission) -> void:
 			_pass("campaign")
 	else:
 		_pass("m%d" % m.number)
+
+
+## Stages a firefight in front of the camera (--fxdemo with shotN) to look at
+## muzzle flashes, impacts, explosions, lights and lightning in screenshots.
+func _fx_demo(m: Mission) -> void:
+	var c: Vector3 = G.camera.position
+	var z := OS.get_environment("ASHFALL_SHOT_ZOOM")
+	if z != "":
+		G.camera.target_zoom = float(z)
+	if G.hud:
+		G.hud.visible = false
+	for n in get_tree().get_nodes_in_group("dialogue"):
+		n.visible = false
+	var ids_a := ["rifleman", "rifleman", "rocket_trooper", "warden", "tempest"]
+	var ids_b := ["cyborg", "cyborg", "scorpion", "scorpion", "veil_artillery"]
+	for i in ids_a.size():
+		G.spawn_unit(ids_a[i], G.PLAYER, c + Vector3(-4.5 + randf_range(-1, 1), 0, -3.0 + i * 1.5))
+	for i in ids_b.size():
+		G.spawn_unit(ids_b[i], G.ENEMY, c + Vector3(4.5 + randf_range(-1, 1), 0, -3.0 + i * 1.5))
+	await _wait_time(m, 2.4)
+	Fx.explosion(c + Vector3(2.0, 0.3, 3.5), 1.6)
+	await _wait_time(m, 0.3)
+	Fx.explosion(c + Vector3(-1.5, 0.3, -3.0), 0.9)
+	if G.weather:
+		G.weather.strike(c + Vector3(1.0, G.map.height_at(c), -5.0), Color(0.6, 0.7, 1.0))
+	await _wait_time(m, 0.12)
+	await _save_shot("mission%d_a" % m.number)
+	await _wait_time(m, 0.5)
+
+
+## Frame sequence of one explosion and a cannon shot up close (--fxboom).
+func _fx_boom(m: Mission) -> void:
+	var c: Vector3 = G.camera.position
+	G.camera.target_zoom = 14.0
+	if G.hud:
+		G.hud.visible = false
+	await _wait_time(m, 1.2)
+	var p := Vector3(c.x, G.map.height_at(c) + 0.4, c.z)
+	Fx.explosion(p, 1.5)
+	Fx.flash(p + Vector3(-3, 0.5, 2), Vector3(1, 0, 0), "shell", 90.0)
+	Fx.flash(p + Vector3(-3, 0.5, 3), Vector3(1, 0, 0), "tracer", 12.0)
+	Fx.impact(p + Vector3(3, -0.3, 2.5), "tracer")
+	var times := [0.05, 0.15, 0.35, 0.7, 1.4]
+	var t := 0.0
+	for i in times.size():
+		await _wait_time(m, times[i] - t)
+		t = times[i]
+		await _save_shot("boom%d" % i)
 
 
 func _save_shot(tag: String) -> void:

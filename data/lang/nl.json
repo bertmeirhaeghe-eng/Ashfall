@@ -955,5 +955,9 @@
  "secondary": "secundair",
  "subtitles only": "alleen ondertitels",
  "system text-to-speech": "spraaksynthese van het systeem",
- "x%d queued": "x%d in de wachtrij"
+ "x%d queued": "x%d in de wachtrij",
+ "Graphics quality": "Grafische kwaliteit",
+ "Low": "Laag",
+ "Medium": "Gemiddeld",
+ "High": "Hoog"
 }

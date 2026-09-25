@@ -49,7 +49,7 @@ func theme() -> Dictionary:
 		"sky_top": Color(0.22, 0.26, 0.3), "sky_horizon": Color(0.75, 0.55, 0.4),
 		"ground_horizon": Color(0.35, 0.33, 0.28), "sun_rot": Vector3(-22, 70, 0),
 		"sun_color": Color(1.0, 0.75, 0.55), "sun_energy": 1.0, "ambient": 0.6,
-		"fog_color": Color(0.55, 0.5, 0.45), "fog_density": 0.006, "weather": "ash",
+		"fog_color": Color(0.55, 0.5, 0.45), "fog_density": 0.006, "weather": "ash", "lights": 0.45,
 	}
 
 

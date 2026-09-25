@@ -635,6 +635,7 @@ func _build_visuals() -> void:
 	sm.albedo_color = (palette["rock"] as Color).darkened(0.5)
 	sm.roughness = 1.0
 	skirt.material_override = sm
+	skirt.layers = 1 | 2
 	add_child(skirt)
 
 	rebuild_static()
@@ -878,6 +879,7 @@ func _build_ground_mesh() -> void:
 	mat.set_shader_parameter("rock_light", r.lightened(0.1))
 	mat.set_shader_parameter("rock_dark", r.darkened(0.8))
 	ground.material_override = mat
+	ground.layers = 1 | 2   # layer 2: receives scorch marks (Vfx decals)
 	add_child(ground)
 
 

@@ -9,6 +9,7 @@ const GOLD := Color(0.85, 0.66, 0.2)
 
 var _value_labels := {}
 var _lang_btn: OptionButton
+var _gfx_btn: OptionButton
 
 
 func _ready() -> void:
@@ -67,6 +68,18 @@ func _ready() -> void:
 	grid.add_child(_lang_btn)
 	grid.add_child(Control.new())
 
+	var gl := Label.new()
+	gl.text = "Graphics quality"
+	grid.add_child(gl)
+	_gfx_btn = OptionButton.new()
+	_gfx_btn.custom_minimum_size = Vector2(190, 0)
+	for i in Settings.GRAPHICS_LEVELS.size():
+		_gfx_btn.add_item(tr(Settings.GRAPHICS_LEVELS[i]), i)
+	_gfx_btn.select(Settings.graphics)
+	_gfx_btn.item_selected.connect(_on_graphics)
+	grid.add_child(_gfx_btn)
+	grid.add_child(Control.new())
+
 	var back := Button.new()
 	back.text = "Back"
 	back.custom_minimum_size = Vector2(0, 42)
@@ -89,6 +102,11 @@ func _on_volume_released(_changed: bool, bus_name: String) -> void:
 		"Voice":
 			Voice.stop_all()
 			Voice.say("eva", "Welcome back, Commander.")
+
+
+func _on_graphics(index: int) -> void:
+	Settings.set_graphics(index)
+	Sfx.ui("confirm")
 
 
 func _on_language(index: int) -> void:
