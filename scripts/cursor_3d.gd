@@ -8,7 +8,7 @@ extends CanvasLayer
 ## Only lives in the gameplay scene (added by main.gd); menus keep the OS
 ## pointer.
 
-const SIZE := 96
+const SIZE := 48
 const HALF := SIZE * 0.5
 
 var _tex_rect: TextureRect
@@ -106,7 +106,7 @@ func _process(delta: float) -> void:
 		var icon: Node3D = _icons[k]
 		var active: bool = k == kind
 		icon.visible = active
-		if active and k != "arrow":
+		if active:
 			icon.rotation.y += delta * 1.6
 			icon.position.y = sin(_spin * 3.0) * 0.03
 
@@ -130,6 +130,7 @@ func _build_arrow() -> Node3D:
 	mat.metallic = 0.1
 	mat.roughness = 0.35
 
+	# lying flat on the ground plane (XZ), tip pointing along +Z
 	var rig := Node3D.new()
 	var tip := MeshInstance3D.new()
 	var cm := CylinderMesh.new()
@@ -138,18 +139,18 @@ func _build_arrow() -> Node3D:
 	cm.height = 0.5
 	tip.mesh = cm
 	tip.material_override = mat
-	tip.position = Vector3(0, -0.25, 0)
+	tip.rotation_degrees.x = 90.0
+	tip.position = Vector3(0, 0, 0.25)
 	rig.add_child(tip)
 
 	var shaft := MeshInstance3D.new()
 	var bm := BoxMesh.new()
-	bm.size = Vector3(0.17, 0.55, 0.1)
+	bm.size = Vector3(0.17, 0.1, 0.55)
 	shaft.mesh = bm
 	shaft.material_override = mat
-	shaft.position = Vector3(0, -0.775, 0)
+	shaft.position = Vector3(0, 0, 0.775)
 	rig.add_child(shaft)
 
-	rig.rotation_degrees.z = 32.0
 	return rig
 
 
@@ -161,16 +162,17 @@ func _build_move() -> Node3D:
 	mat.emission_energy_multiplier = 1.8
 	_mats["move"] = mat
 
+	# four diamonds lying flat around the centre, in the XZ ground plane
 	var rig := Node3D.new()
 	for i in 4:
 		var ang := deg_to_rad(90.0 * i)
 		var mi := MeshInstance3D.new()
 		var bm := BoxMesh.new()
-		bm.size = Vector3(0.22, 0.22, 0.08)
+		bm.size = Vector3(0.22, 0.08, 0.22)
 		mi.mesh = bm
 		mi.material_override = mat
-		mi.position = Vector3(sin(ang), cos(ang), 0) * 0.5
-		mi.rotation_degrees.z = 45.0
+		mi.position = Vector3(sin(ang), 0, cos(ang)) * 0.5
+		mi.rotation_degrees.y = 45.0
 		rig.add_child(mi)
 	return rig
 
@@ -183,6 +185,7 @@ func _build_attack() -> Node3D:
 	mat.emission_energy_multiplier = 1.9
 	_mats["attack"] = mat
 
+	# ring + ticks lying flat in the XZ ground plane (a torus is already flat)
 	var rig := Node3D.new()
 	var ring := MeshInstance3D.new()
 	var tm := TorusMesh.new()
@@ -192,24 +195,23 @@ func _build_attack() -> Node3D:
 	tm.ring_segments = 16
 	ring.mesh = tm
 	ring.material_override = mat
-	ring.rotation_degrees.x = 90.0
 	rig.add_child(ring)
 	for i in 4:
 		var ang := deg_to_rad(90.0 * i + 45.0)
 		var mi := MeshInstance3D.new()
 		var bm := BoxMesh.new()
-		bm.size = Vector3(0.08, 0.22, 0.08)
+		bm.size = Vector3(0.08, 0.08, 0.22)
 		mi.mesh = bm
 		mi.material_override = mat
-		mi.position = Vector3(sin(ang), cos(ang), 0) * 0.5
-		mi.rotation_degrees.z = rad_to_deg(ang)
+		mi.position = Vector3(sin(ang), 0, cos(ang)) * 0.5
+		mi.rotation_degrees.y = rad_to_deg(ang)
 		rig.add_child(mi)
 	var dot := MeshInstance3D.new()
 	var db := BoxMesh.new()
-	db.size = Vector3(0.1, 0.1, 0.1)
+	db.size = Vector3(0.1, 0.06, 0.1)
 	dot.mesh = db
 	dot.material_override = mat
-	dot.rotation_degrees.z = 45.0
+	dot.rotation_degrees.y = 45.0
 	rig.add_child(dot)
 	return rig
 
@@ -224,6 +226,7 @@ func _build_coin(key: String, color: Color, glyph: String) -> Node3D:
 	mat.roughness = 0.3
 	_mats[key] = mat
 
+	# coin lying flat on the ground (a cylinder's caps already face up/down)
 	var rig := Node3D.new()
 	var mi := MeshInstance3D.new()
 	var cm := CylinderMesh.new()
@@ -233,7 +236,6 @@ func _build_coin(key: String, color: Color, glyph: String) -> Node3D:
 	cm.radial_segments = 20
 	mi.mesh = cm
 	mi.material_override = mat
-	mi.rotation_degrees.x = 90.0
 	rig.add_child(mi)
 
 	var label := Label3D.new()
@@ -245,6 +247,6 @@ func _build_coin(key: String, color: Color, glyph: String) -> Node3D:
 	label.outline_size = 10
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	label.no_depth_test = true
-	label.position = Vector3(0, 0, 0.08)
+	label.position = Vector3(0, 0.09, 0)
 	rig.add_child(label)
 	return rig
