@@ -105,12 +105,14 @@ func setup() -> void:
 	# towns, buses and the church
 	for town in TOWNS.keys():
 		var c: Vector2i = TOWNS[town]
-		for off in [Vector2i(-4, -3), Vector2i(2, -4), Vector2i(-3, 3), Vector2i(3, 2)]:
-			building("house", NEUTRAL, c + off)
+		var houses := [Vector2i(-4, -3), Vector2i(2, -4), Vector2i(-3, 3), Vector2i(3, 2)]
+		for i in houses.size():
+			building("house" if i % 2 == 0 else "cottage", NEUTRAL, c + houses[i])
 		var bus := spawn_one("bus", NEUTRAL, c, "bus")
 		buses[town] = bus
 		bus_state[town] = "waiting"
 	building("church", NEUTRAL, CHURCH, "church")
+	building("mapletree", NEUTRAL, CHURCH + Vector2i(-3, -1))
 	# the Veil camp in the forest
 	building("veil_camp", ENEMY, CAMP + Vector2i(-3, -2), "camp")
 	building("veil_camp", ENEMY, CAMP + Vector2i(2, 1), "camp")

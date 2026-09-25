@@ -5,20 +5,25 @@
     python3 tools/models/build_models.py walker     # just some
 
 Units with an STL source (tools/models/stl) are converted: oriented, scaled,
-split into animated parts and painted into material slots. The rest are
-modelled procedurally in procedural.py in a Tiberian Sun style.
+split into animated parts and painted into material slots. Environment art
+(houses, trees...) comes from found FBX/OBJ assets, converted and pruned to a
+poly budget in tools/models/src/environment (see the README there) and
+painted the same way. The rest is modelled procedurally in procedural.py in a
+Tiberian Sun style.
 """
 import os
 import sys
 
 import numpy as np
+import trimesh
 
 import procedural
-from ashmodel import Model, load_stl, split_components, submesh
+from ashmodel import Model, load_env, load_stl, split_components, submesh
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.normpath(os.path.join(HERE, "..", "..", "models"))
 STL = os.path.join(HERE, "stl")
+ENV = os.path.join(HERE, "src", "environment")
 
 
 def comp_info(c):
@@ -126,10 +131,99 @@ def scout_mech():
                    0.35, 0.42, 0.85)
 
 
+# ----------------------------------------------------- environment art (OBJ)
+def _roof_paint(model, mesh, part, height, roof_frac=0.65, up=0.5, found_frac=0.05):
+    """Heuristic paint for a merged building mesh with no named sub-parts:
+    a dark foundation strip, plain walls, and an upward-facing roof."""
+    tri = mesh.triangles
+    cen = tri.mean(1)
+    nrm = mesh.face_normals
+    slot = np.full(len(tri), "body", dtype=object)
+    slot[cen[:, 1] < found_frac * height] = "dark"
+    slot[(cen[:, 1] > roof_frac * height) & (nrm[:, 1] > up)] = "panel"
+    for s in set(slot):
+        sm = submesh(mesh, slot == s)
+        if sm is not None:
+            model.add(sm, s, part)
+
+
+def _flat_cap(x0, x1, z0, z1, y):
+    """An upward-facing rectangle, for capping a roof that doesn't fully
+    close over its interior (seen from the game's overhead camera)."""
+    m = trimesh.Trimesh(vertices=[[x0, y, z0], [x1, y, z0], [x1, y, z1], [x0, y, z1]],
+                         faces=[[0, 1, 2], [0, 2, 3]], process=False)
+    if m.face_normals[0][1] < 0:
+        m.invert()
+    return m
+
+
+def house():
+    """Farmhouse decor building (data/rules.json "house"), from a found FBX
+    asset converted and pruned in tools/models/src/environment/house.obj."""
+    parts = load_env(os.path.join(ENV, "house.obj"), height=1.5)
+    slot_of = {"fundametnts": "dark", "windows": "glass", "window_roof": "glass",
+               "door": "dark", "barrels": "metal", "wall_barrels": "metal",
+               "lamp_exterior": "lamp", "roof": "panel", "ridge": "panel", "chimneys": "panel"}
+    md = Model("house")
+    for name, mesh in parts.items():
+        md.add(mesh, slot_of.get(name, "body"), "body")
+    # safety net: an eave-height cap under the roof, so an unnoticed gap in
+    # this complex, multi-wing roof can't show through to open sky
+    all_v = np.concatenate([m.vertices for m in parts.values()])
+    eave_y = parts["roof"].bounds[0][1]
+    md.add(_flat_cap(all_v[:, 0].min(), all_v[:, 0].max(), all_v[:, 2].min(), all_v[:, 2].max(), eave_y),
+           "dark", "body")
+    return md
+
+
+def church():
+    """Collapsed Church decor building (data/rules.json "church"). The source
+    file's two material groups don't line up with any useful part split (both
+    span the full footprint), so paint the merged shell geometrically instead."""
+    parts = load_env(os.path.join(ENV, "church.obj"), height=2.4)
+    md = Model("church")
+    shell = trimesh.util.concatenate([parts["detail"], parts["walls_roof"]])
+    _roof_paint(md, shell, "body", 2.4, roof_frac=0.6)
+    return md
+
+
+def cottage():
+    """Small cottage decor building, a shorter neighbour to house()."""
+    parts = load_env(os.path.join(ENV, "cottage.obj"), height=1.3)
+    md = Model("cottage")
+    _roof_paint(md, parts["body"], "body", 1.3, roof_frac=0.55)
+    return md
+
+
+def tree():
+    """Generic forest tree: trunk + canopy parts, drawn as two colour-tinted
+    MultiMeshes by map_grid.gd's forest scatter (map_grid.gd _build_forest)."""
+    parts = load_env(os.path.join(ENV, "tree.obj"), height=2.1)
+    md = Model("tree")
+    md.add(parts["trunk"], "body", md.part("trunk", (0, 0, 0)))
+    md.add(parts["canopy"], "body", md.part("canopy", (0, 0, 0)))
+    return md
+
+
+def mapletree():
+    """Ornamental specimen maple, placed individually like blossom_tree
+    rather than mass-scattered (its source keeps more branch detail)."""
+    parts = load_env(os.path.join(ENV, "mapletree.obj"), height=2.6)
+    md = Model("mapletree")
+    md.add(parts["trunk"], "dark", "body")
+    md.add(parts["canopy"], "foliage", "body")
+    return md
+
+
 MODELS = {
     "harvester": harvester,
     "walker": walker,
     "scout_mech": scout_mech,
+    "house": house,
+    "church": church,
+    "cottage": cottage,
+    "tree": tree,
+    "mapletree": mapletree,
 }
 MODELS.update(procedural.MODELS)
 

@@ -531,6 +531,16 @@
       "cost": 0, "build_time": 1, "hp": 500, "armor": "structure",
       "size": [2, 2], "power": 0, "model": "house", "height": 1.4, "prereq": []
     },
+    "cottage": {
+      "name": "Cottage", "category": "structure", "faction": "any", "buildable": false, "decor": true,
+      "cost": 0, "build_time": 1, "hp": 450, "armor": "structure",
+      "size": [3, 3], "power": 0, "model": "cottage", "height": 1.3, "prereq": []
+    },
+    "mapletree": {
+      "name": "Maple Tree", "category": "structure", "faction": "any", "buildable": false, "decor": true, "invulnerable": true,
+      "cost": 0, "build_time": 1, "hp": 100, "armor": "structure",
+      "size": [1, 1], "power": 0, "model": "mapletree", "height": 2.6, "prereq": []
+    },
     "church": {
       "name": "Collapsed Church", "category": "structure", "faction": "any", "buildable": false, "decor": true, "invulnerable": true,
       "cost": 0, "build_time": 1, "hp": 800, "armor": "structure",

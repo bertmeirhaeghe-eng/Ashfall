@@ -1077,30 +1077,20 @@ func _build_rocks() -> void:
 
 
 func _build_forest() -> void:
-	var cone := CylinderMesh.new()
-	cone.top_radius = 0.0
-	cone.bottom_radius = 0.5
-	cone.height = 1.6
-	cone.radial_segments = 6
-	cone.rings = 1
-	var trunk := CylinderMesh.new()
-	trunk.top_radius = 0.07
-	trunk.bottom_radius = 0.1
-	trunk.height = 0.6
-	trunk.radial_segments = 5
-	trunk.rings = 1
-	var tops: Array = []
-	var trunks: Array = []
+	# tree.amdl (tools/models/src/environment/): trunk and canopy share one
+	# origin, so a single per-instance transform plants both parts together.
+	var tree_parts := MeshFactory.parts("tree")
+	var xforms: Array = []
 	for c in _cells_of(Terrain.FOREST):
 		var hk := hash(c)
 		var s := 0.8 + float(hk % 7) * 0.08
+		var rot := float(hk % 628) / 100.0
 		var ox := float(hk % 100) / 100.0 * 0.3 - 0.15
 		var oz := float((hk / 100) % 100) / 100.0 * 0.3 - 0.15
 		var gy := height_at(Vector3(c.x + 0.5 + ox, 0, c.y + 0.5 + oz))
-		tops.append(Transform3D(Basis().scaled(Vector3(s, s, s)), Vector3(c.x + 0.5 + ox, gy + 0.55 + 0.8 * s, c.y + 0.5 + oz)))
-		trunks.append(Transform3D(Basis(), Vector3(c.x + 0.5 + ox, gy + 0.3, c.y + 0.5 + oz)))
-	_add_mm(cone, tops, MeshFactory.mat(palette["tree"], 0.0, 0.9, 0.0))
-	_add_mm(trunk, trunks, MeshFactory.mat(Color(0.22, 0.17, 0.12), 0.0, 0.9, 0.0))
+		xforms.append(Transform3D(Basis(Vector3.UP, rot).scaled(Vector3(s, s, s)), Vector3(c.x + 0.5 + ox, gy, c.y + 0.5 + oz)))
+	_add_mm(tree_parts["canopy"], xforms, MeshFactory.mat(palette["tree"], 0.0, 0.9, 0.0))
+	_add_mm(tree_parts["trunk"], xforms, MeshFactory.mat(Color(0.22, 0.17, 0.12), 0.0, 0.9, 0.0))
 
 
 func _build_blocks() -> void:
