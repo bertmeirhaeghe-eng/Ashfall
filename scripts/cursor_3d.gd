@@ -106,7 +106,7 @@ func _process(delta: float) -> void:
 		var icon: Node3D = _icons[k]
 		var active: bool = k == kind
 		icon.visible = active
-		if active:
+		if active and k != "arrow":
 			icon.rotation.y += delta * 1.6
 			icon.position.y = sin(_spin * 3.0) * 0.03
 
@@ -130,7 +130,8 @@ func _build_arrow() -> Node3D:
 	mat.metallic = 0.1
 	mat.roughness = 0.35
 
-	# lying flat on the ground plane (XZ), tip pointing along +Z
+	# lying flat on the ground plane (XZ); apex sits at the hotspot (local
+	# origin, under the mouse) and points along +Z, tail trailing behind it
 	var rig := Node3D.new()
 	var tip := MeshInstance3D.new()
 	var cm := CylinderMesh.new()
@@ -140,7 +141,7 @@ func _build_arrow() -> Node3D:
 	tip.mesh = cm
 	tip.material_override = mat
 	tip.rotation_degrees.x = 90.0
-	tip.position = Vector3(0, 0, 0.25)
+	tip.position = Vector3(0, 0, -0.25)
 	rig.add_child(tip)
 
 	var shaft := MeshInstance3D.new()
@@ -148,7 +149,7 @@ func _build_arrow() -> Node3D:
 	bm.size = Vector3(0.17, 0.1, 0.55)
 	shaft.mesh = bm
 	shaft.material_override = mat
-	shaft.position = Vector3(0, 0, 0.775)
+	shaft.position = Vector3(0, 0, -0.775)
 	rig.add_child(shaft)
 
 	return rig
