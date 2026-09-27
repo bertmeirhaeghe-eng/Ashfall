@@ -20,6 +20,14 @@ const DEFAULT_ORDER := ["power_plant", "refinery", "barracks", "power_plant", "w
 	"guard_tower", "power_plant", "refinery", "guard_tower", "power_plant", "barracks", "guard_tower"]
 const CORE := ["power_plant", "refinery", "barracks", "war_factory"]
 
+## Multipliers applied to each mission's own tuning, keyed by Settings.difficulty.
+## Medium (1) is a no-op: every existing mission's numbers are today's Medium.
+const DIFFICULTY_SCALE := {
+	0: {"income": 0.6, "interval": 1.35, "attack": 1.3, "wave": 0.75, "radius": 0.85},
+	1: {"income": 1.0, "interval": 1.0, "attack": 1.0, "wave": 1.0, "radius": 1.0},
+	2: {"income": 1.5, "interval": 0.75, "attack": 0.75, "wave": 1.3, "radius": 1.15},
+}
+
 var p: PlayerState
 var base_center := Vector3.ZERO
 var enemy_dir := Vector3.FORWARD
@@ -56,6 +64,18 @@ func setup(player: PlayerState, base_cell: Vector2i, enemy_cell: Vector2i, opts 
 	defend_radius = float(opts.get("defend_radius", 16.0))
 	fixed_target = opts.get("target", Vector2i(-9999, -9999))
 	rng.randomize()
+	_apply_difficulty()
+
+
+## Scales this mission's own AI tuning by the player's chosen difficulty.
+func _apply_difficulty() -> void:
+	var scale: Dictionary = DIFFICULTY_SCALE.get(Settings.difficulty, DIFFICULTY_SCALE[1])
+	income *= scale["income"]
+	wave_interval *= scale["interval"]
+	_attack_cooldown *= scale["attack"]
+	wave_size = maxi(1, int(round(wave_size * scale["wave"])))
+	wave_max = maxi(wave_size, int(round(wave_max * scale["wave"])))
+	defend_radius *= scale["radius"]
 
 
 func _physics_process(delta: float) -> void:

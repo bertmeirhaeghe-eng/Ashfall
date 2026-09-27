@@ -10,6 +10,7 @@ const GOLD := Color(0.85, 0.66, 0.2)
 var _value_labels := {}
 var _lang_btn: OptionButton
 var _gfx_btn: OptionButton
+var _difficulty_btn: OptionButton
 
 
 func _ready() -> void:
@@ -80,6 +81,18 @@ func _ready() -> void:
 	grid.add_child(_gfx_btn)
 	grid.add_child(Control.new())
 
+	var dl := Label.new()
+	dl.text = "Difficulty"
+	grid.add_child(dl)
+	_difficulty_btn = OptionButton.new()
+	_difficulty_btn.custom_minimum_size = Vector2(190, 0)
+	for i in Settings.DIFFICULTIES.size():
+		_difficulty_btn.add_item(tr(Settings.DIFFICULTIES[i]), i)
+	_difficulty_btn.select(Settings.difficulty)
+	_difficulty_btn.item_selected.connect(_on_difficulty)
+	grid.add_child(_difficulty_btn)
+	grid.add_child(Control.new())
+
 	var ml := Label.new()
 	ml.text = "Battlefield mist"
 	grid.add_child(ml)
@@ -115,6 +128,11 @@ func _on_volume_released(_changed: bool, bus_name: String) -> void:
 
 func _on_graphics(index: int) -> void:
 	Settings.set_graphics(index)
+	Sfx.ui("confirm")
+
+
+func _on_difficulty(index: int) -> void:
+	Settings.set_difficulty(index)
 	Sfx.ui("confirm")
 
 
