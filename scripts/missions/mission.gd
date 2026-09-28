@@ -446,13 +446,40 @@ func send_wave(ids: Array, team: int, from: Vector2i, to: Vector2i, tag := "") -
 	return us
 
 
+## Enemy economy/pace multipliers per Settings.difficulty (0 easy, 1 medium,
+## 2 hard). Medium is 1.0: every mission's opts are already balanced against
+## the AI it was authored with, so Medium reproduces that exactly.
+const DIFFICULTY_ECONOMY := [0.6, 1.0, 1.5]   # income, wave_size, wave_max
+const DIFFICULTY_PACE := [1.3, 1.0, 0.75]     # first_attack, wave_interval (lower = faster)
+
+
 func add_ai(p: PlayerState, base_cell: Vector2i, enemy_cell: Vector2i, opts := {}) -> AIController:
 	var ai := AIController.new()
 	ai.name = "AI_%d" % p.id
 	add_child(ai)
-	ai.setup(p, base_cell, enemy_cell, opts)
+	ai.setup(p, base_cell, enemy_cell, _scale_ai_opts(opts))
 	_ai.append(ai)
 	return ai
+
+
+## Applies the current difficulty setting to a mission-authored AI opts dict,
+## leaving fields the mission didn't set untouched (AIController fills those
+## with its own defaults).
+func _scale_ai_opts(opts: Dictionary) -> Dictionary:
+	var econ: float = DIFFICULTY_ECONOMY[Settings.difficulty]
+	var pace: float = DIFFICULTY_PACE[Settings.difficulty]
+	var out := opts.duplicate()
+	if out.has("income"):
+		out["income"] = float(out["income"]) * econ
+	if out.has("wave_size"):
+		out["wave_size"] = maxi(1, roundi(float(out["wave_size"]) * econ))
+	if out.has("wave_max"):
+		out["wave_max"] = maxi(1, roundi(float(out["wave_max"]) * econ))
+	if out.has("first_attack"):
+		out["first_attack"] = float(out["first_attack"]) * pace
+	if out.has("wave_interval"):
+		out["wave_interval"] = float(out["wave_interval"]) * pace
+	return out
 
 
 func focus(cell: Vector2i) -> void:
