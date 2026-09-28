@@ -130,7 +130,7 @@
     "mobile_sensor": {
       "name": "Mobile Sensor Array", "category": "vehicle", "faction": "bastion",
       "cost": 900, "build_time": 9, "hp": 300, "armor": "light",
-      "speed": 2.2, "radius": 0.45, "model": "sensor_truck", "height": 1.3, "detector": 7,
+      "speed": 2.2, "radius": 0.45, "model": "sensor_truck", "height": 1.3, "detector": 10,
       "prereq": ["war_factory", "radar"], "voice": "sensor"
     },
     "tempest": {

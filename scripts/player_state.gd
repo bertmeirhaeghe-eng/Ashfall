@@ -198,6 +198,9 @@ func speed_mult(category: String) -> float:
 	var n := factories(category).size()
 	if n > 1:
 		m *= 1.0 + float(G.game_rule("extra_factory_bonus", 0.25)) * (n - 1)
+	if is_ai:
+		var scale: Dictionary = AIController.DIFFICULTY_SCALE.get(Settings.difficulty, AIController.DIFFICULTY_SCALE[1])
+		m *= float(scale["build"])
 	return m
 
 
