@@ -22,10 +22,13 @@ const CORE := ["power_plant", "refinery", "barracks", "war_factory"]
 
 ## Multipliers applied to each mission's own tuning, keyed by Settings.difficulty.
 ## Medium (1) is a no-op: every existing mission's numbers are today's Medium.
+## "hp" and "damage" also scale every AI-owned unit/structure's max health and
+## weapon damage (see Entity.setup() / Entity.fire()), so Easy/Hard change how
+## tough and how hard-hitting the enemy is, not just how it plays.
 const DIFFICULTY_SCALE := {
-	0: {"income": 0.6, "interval": 1.35, "attack": 1.3, "wave": 0.75, "radius": 0.85},
-	1: {"income": 1.0, "interval": 1.0, "attack": 1.0, "wave": 1.0, "radius": 1.0},
-	2: {"income": 1.5, "interval": 0.75, "attack": 0.75, "wave": 1.3, "radius": 1.15},
+	0: {"income": 0.6, "interval": 1.35, "attack": 1.3, "wave": 0.75, "radius": 0.85, "hp": 0.75, "damage": 0.7},
+	1: {"income": 1.0, "interval": 1.0, "attack": 1.0, "wave": 1.0, "radius": 1.0, "hp": 1.0, "damage": 1.0},
+	2: {"income": 1.5, "interval": 0.75, "attack": 0.75, "wave": 1.3, "radius": 1.15, "hp": 1.25, "damage": 1.3},
 }
 
 var p: PlayerState
