@@ -14,11 +14,19 @@ soundtrack round it out.
 every mission (`user://ashfall_campaign.json`), so **Continue Game** returns you to the briefing of the
 mission you reached, with every story choice you have made so far.
 
-## Options: volume and language
+## Options: volume, language and graphics
 **Options** (main menu, or **Esc** in a mission) has sliders for **music**, **sound effects** and
-**speech** volume, and the **language**: **English** or **Nederlands** (Dutch). Settings are saved
-in `user://ashfall_settings.cfg`. The language changes everything at once: menus, the HUD, tooltips,
-unit and building names, objectives, subtitles, briefings, the story, and all the spoken voices.
+**speech** volume, the **language** (**English** or **Nederlands**, Dutch) and the **graphics
+quality**. Settings are saved in `user://ashfall_settings.cfg`.
+
+Graphics quality caps the resolution the 3D scene is drawn at and upscales it with AMD FSR, so a
+fullscreen window on a large monitor no longer multiplies the cost of the terrain shader, SSAO,
+glow and MSAA (the HUD is always drawn at full resolution):
+- **Low**: 3D at up to 720 lines, no MSAA, no SSAO, hard shadows with a smaller shadow map.
+- **Medium** (default): 3D at up to 1080 lines, 2x MSAA, half-size low-quality SSAO, soft shadows.
+- **High**: 3D at native resolution, 2x MSAA, medium-quality SSAO, soft shadows.
+
+The language changes everything at once: menus, the HUD, tooltips, unit and building names, objectives, subtitles, briefings, the story, and all the spoken voices.
 
 Every string is written in English in the code and goes through Godot's `tr()`; the Dutch text lives
 in `data/lang/nl.json` (English -> Dutch). `python3 tools/lang/extract_strings.py --verbose` lists any

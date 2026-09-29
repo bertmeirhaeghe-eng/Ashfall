@@ -104,7 +104,7 @@ func _setup_environment(th: Dictionary) -> void:
 	env.fog_sky_affect = 0.6
 	env.fog_height = 0.4
 	env.fog_height_density = 0.06
-	env.ssao_enabled = true
+	env.ssao_enabled = Settings.gfx("ssao")
 	env.ssao_intensity = 2.2
 	env.adjustment_enabled = true
 	env.adjustment_brightness = 0.97
@@ -113,6 +113,7 @@ func _setup_environment(th: Dictionary) -> void:
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
+	Settings.graphics_changed.connect(func(): env.ssao_enabled = Settings.gfx("ssao"))
 
 	var sun := DirectionalLight3D.new()
 	sun.name = "Sun"

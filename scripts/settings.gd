@@ -1,6 +1,7 @@
 extends Node
 ## Player options (autoload "Settings", loaded first): music / sound-effect /
-## speech volume and the game language. Saved in user://ashfall_settings.cfg.
+## speech volume, the game language and the graphics quality. Saved in
+## user://ashfall_settings.cfg.
 ##
 ## Language: every user-facing string in the game is written in English and
 ## goes through Godot's tr(). Dutch comes from data/lang/nl.json, a flat
@@ -9,6 +10,7 @@ extends Node
 
 signal changed
 signal language_changed
+signal graphics_changed
 
 const PATH := "user://ashfall_settings.cfg"
 const LANGUAGES := [["en", "English"], ["nl", "Nederlands"]]
@@ -16,8 +18,24 @@ const LANG_FILES := {"nl": "res://data/lang/nl.json"}
 ## Audio buses: name -> default volume (0..100)
 const BUSES := {"Music": 70, "Sfx": 80, "Voice": 90}
 
+## Graphics presets. render_h is the most pixel rows the 3D scene is drawn at:
+## a taller window (fullscreen on a 1440p or 4K monitor) draws the 3D scene at
+## that height and FSR upscales it, so the terrain shader, SSAO, glow and MSAA
+## cost about the same at any window size. The HUD stays at full resolution.
+## 0 = always native resolution.
+const QUALITIES := [["low", "Low"], ["medium", "Medium"], ["high", "High"]]
+const QUALITY := {
+	"low": {"render_h": 720, "msaa": Viewport.MSAA_DISABLED, "ssao": false,
+			"ssao_quality": RenderingServer.ENV_SSAO_QUALITY_VERY_LOW, "shadow_atlas": 2048, "soft_shadows": false},
+	"medium": {"render_h": 1080, "msaa": Viewport.MSAA_2X, "ssao": true,
+			"ssao_quality": RenderingServer.ENV_SSAO_QUALITY_LOW, "shadow_atlas": 4096, "soft_shadows": true},
+	"high": {"render_h": 0, "msaa": Viewport.MSAA_2X, "ssao": true,
+			"ssao_quality": RenderingServer.ENV_SSAO_QUALITY_MEDIUM, "shadow_atlas": 4096, "soft_shadows": true},
+}
+
 var volumes := {"Music": 70, "Sfx": 80, "Voice": 90}
 var language := "en"
+var quality := "medium"
 var _tables := {}   # locale -> Translation
 
 
@@ -42,6 +60,8 @@ func _ready() -> void:
 	if env != "":
 		language = env
 	_apply()
+	get_tree().root.size_changed.connect(_fit_render_scale)
+	_apply_graphics()
 
 
 func _load_table(t: Translation, path: String) -> bool:
@@ -86,6 +106,9 @@ func _load() -> void:
 	for b in BUSES.keys():
 		volumes[b] = clampi(int(cf.get_value("audio", b.to_lower(), BUSES[b])), 0, 100)
 	language = str(cf.get_value("game", "language", "en"))
+	quality = str(cf.get_value("graphics", "quality", "medium"))
+	if not QUALITY.has(quality):
+		quality = "medium"
 
 
 func save() -> void:
@@ -95,6 +118,7 @@ func save() -> void:
 	for b in BUSES.keys():
 		cf.set_value("audio", b.to_lower(), volumes[b])
 	cf.set_value("game", "language", language)
+	cf.set_value("graphics", "quality", quality)
 	cf.save(PATH)
 
 
@@ -127,6 +151,41 @@ func set_language(code: String) -> void:
 	_apply()
 	changed.emit()
 	language_changed.emit()
+
+
+func set_quality(code: String) -> void:
+	if code == quality or not QUALITY.has(code):
+		return
+	quality = code
+	_apply_graphics()
+	changed.emit()
+
+
+## A value of the current graphics preset (see QUALITY).
+func gfx(key: String):
+	return QUALITY[quality][key]
+
+
+func _apply_graphics() -> void:
+	var root := get_tree().root
+	root.msaa_3d = gfx("msaa")
+	# half-size SSAO; the fade distances are Godot's defaults
+	RenderingServer.environment_set_ssao_quality(gfx("ssao_quality"), true, 0.5, 2, 50.0, 300.0)
+	RenderingServer.directional_shadow_atlas_set_size(gfx("shadow_atlas"), true)
+	RenderingServer.directional_soft_shadow_filter_set_quality(
+			RenderingServer.SHADOW_QUALITY_SOFT_LOW if gfx("soft_shadows") else RenderingServer.SHADOW_QUALITY_HARD)
+	_fit_render_scale()
+	graphics_changed.emit()
+
+
+## Keep the 3D render height at or under the preset's cap as the window resizes.
+func _fit_render_scale() -> void:
+	var root := get_tree().root
+	var cap: int = gfx("render_h")
+	var h := root.size.y
+	var s := 1.0 if cap <= 0 or h <= cap else float(cap) / float(h)
+	root.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR if s < 0.999 else Viewport.SCALING_3D_MODE_BILINEAR
+	root.scaling_3d_scale = s
 
 
 func is_dutch() -> bool:

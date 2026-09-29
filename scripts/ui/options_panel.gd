@@ -1,6 +1,7 @@
 class_name OptionsPanel
 extends PanelContainer
-## Options: music / sound effects / speech volume and the game language.
+## Options: music / sound effects / speech volume, the game language and the
+## graphics quality.
 ## Used by the main menu and by the in-game menu.
 
 signal closed
@@ -65,6 +66,20 @@ func _ready() -> void:
 			_lang_btn.select(i)
 	_lang_btn.item_selected.connect(_on_language)
 	grid.add_child(_lang_btn)
+	grid.add_child(Control.new())
+
+	var gl := Label.new()
+	gl.text = "Graphics quality"
+	grid.add_child(gl)
+	var gfx_btn := OptionButton.new()
+	gfx_btn.custom_minimum_size = Vector2(190, 0)
+	for i in Settings.QUALITIES.size():
+		var q: Array = Settings.QUALITIES[i]
+		gfx_btn.add_item(q[1], i)
+		if q[0] == Settings.quality:
+			gfx_btn.select(i)
+	gfx_btn.item_selected.connect(func(i: int): Settings.set_quality(Settings.QUALITIES[i][0]))
+	grid.add_child(gfx_btn)
 	grid.add_child(Control.new())
 
 	var back := Button.new()
