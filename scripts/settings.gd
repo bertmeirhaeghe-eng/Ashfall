@@ -24,6 +24,9 @@ var graphics := 2
 ## Low white mist drifting over the battlefield (switchable live).
 var mist := true
 const GRAPHICS_LEVELS := ["Low", "Medium", "High"]
+## Mission AI difficulty: 0 Easy, 1 Medium (today's tuning), 2 Hard.
+var difficulty := 1
+const DIFFICULTIES := ["Easy", "Medium", "Hard"]
 var _tables := {}   # locale -> Translation
 
 
@@ -96,6 +99,7 @@ func _load() -> void:
 	language = str(cf.get_value("game", "language", "en"))
 	graphics = clampi(int(cf.get_value("video", "quality", 2)), 0, 2)
 	mist = bool(cf.get_value("video", "mist", true))
+	difficulty = clampi(int(cf.get_value("game", "difficulty", 1)), 0, 2)
 
 
 func save() -> void:
@@ -105,6 +109,7 @@ func save() -> void:
 	for b in BUSES.keys():
 		cf.set_value("audio", b.to_lower(), volumes[b])
 	cf.set_value("game", "language", language)
+	cf.set_value("game", "difficulty", difficulty)
 	cf.set_value("video", "quality", graphics)
 	cf.set_value("video", "mist", mist)
 	cf.save(PATH)
@@ -139,6 +144,11 @@ func set_graphics(level: int) -> void:
 
 func set_mist(on: bool) -> void:
 	mist = on
+	changed.emit()
+
+
+func set_difficulty(level: int) -> void:
+	difficulty = clampi(level, 0, 2)
 	changed.emit()
 
 

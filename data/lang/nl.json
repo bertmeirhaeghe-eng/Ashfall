@@ -960,5 +960,10 @@
  "Low": "Laag",
  "Medium": "Gemiddeld",
  "High": "Hoog",
- "Battlefield mist": "Mist boven het slagveld"
+ "Battlefield mist": "Mist boven het slagveld",
+ "Difficulty": "Moeilijkheidsgraad",
+ "Easy": "Makkelijk",
+ "Hard": "Moeilijk",
+ "Cottage": "Cottage",
+ "Maple Tree": "Esdoorn"
 }

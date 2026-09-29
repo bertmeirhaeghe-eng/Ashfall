@@ -50,7 +50,7 @@ func setup(id: String, p_team: int) -> void:
 	def_id = id
 	def = G.def_of(id)
 	team = p_team
-	max_hp = float(def.get("hp", 100))
+	max_hp = float(def.get("hp", 100)) * _difficulty_mult("hp")
 	hp = max_hp
 	armor = def.get("armor", "light")
 	radius = float(def.get("radius", 0.4))
@@ -60,6 +60,15 @@ func setup(id: String, p_team: int) -> void:
 		weapon = G.weapon_def(def["weapon"])
 	_build_model()
 	_make_ring()
+
+
+## Easy/Hard scale an AI-owned entity's max health and weapon damage; a
+## human-controlled entity, and Medium, are always 1.0 (a no-op).
+func _difficulty_mult(key: String) -> float:
+	if team >= G.players.size() or not (G.players[team] as PlayerState).is_ai:
+		return 1.0
+	var scale: Dictionary = AIController.DIFFICULTY_SCALE.get(Settings.difficulty, AIController.DIFFICULTY_SCALE[1])
+	return float(scale.get(key, 1.0))
 
 
 func model_faction() -> String:
@@ -291,7 +300,7 @@ func fire(t: Entity) -> void:
 	var yaw := atan2(t.position.x - position.x, t.position.z - position.z)
 	var fwd := Vector3(sin(yaw), 0, cos(yaw))
 	var from := position + Vector3(0, muzzle_height, 0) + fwd * (radius * 0.8)
-	var dmg := float(weapon.get("damage", 10)) * rank_value("rank_damage_mult")
+	var dmg := float(weapon.get("damage", 10)) * rank_value("rank_damage_mult") * _difficulty_mult("damage")
 	if def.get("cloak", false):
 		decloak_until = G.elapsed + 1.5
 	var kind: String = weapon.get("projectile", "tracer")
