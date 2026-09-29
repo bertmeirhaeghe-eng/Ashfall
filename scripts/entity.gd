@@ -41,13 +41,16 @@ var turret: Node3D            # optional rotating part
 var muzzle_height := 0.5
 var sel_ring: MeshInstance3D
 var _alpha := 0.0
+var _smoke: GPUParticles3D     # damaged: smoke, then fire
+var _fire: GPUParticles3D
+var _dmg_t := 0.0
 
 
 func setup(id: String, p_team: int) -> void:
 	def_id = id
 	def = G.def_of(id)
 	team = p_team
-	max_hp = float(def.get("hp", 100))
+	max_hp = float(def.get("hp", 100)) * _difficulty_mult("hp")
 	hp = max_hp
 	armor = def.get("armor", "light")
 	radius = float(def.get("radius", 0.4))
@@ -57,6 +60,15 @@ func setup(id: String, p_team: int) -> void:
 		weapon = G.weapon_def(def["weapon"])
 	_build_model()
 	_make_ring()
+
+
+## Easy/Hard scale an AI-owned entity's max health and weapon damage; a
+## human-controlled entity, and Medium, are always 1.0 (a no-op).
+func _difficulty_mult(key: String) -> float:
+	if team >= G.players.size() or not (G.players[team] as PlayerState).is_ai:
+		return 1.0
+	var scale: Dictionary = AIController.DIFFICULTY_SCALE.get(Settings.difficulty, AIController.DIFFICULTY_SCALE[1])
+	return float(scale.get(key, 1.0))
 
 
 func model_faction() -> String:
@@ -73,6 +85,7 @@ func _build_model() -> void:
 	turret = model.get_meta("turret") if model.has_meta("turret") else null
 	muzzle_height = float(model.get_meta("muzzle_height", bar_height * 0.6))
 	_alpha = 0.0
+	LightRig.attach(self)
 
 
 func _process(delta: float) -> void:
@@ -80,6 +93,52 @@ func _process(delta: float) -> void:
 		var sp: Node3D = model.get_meta("spin")
 		if is_instance_valid(sp):
 			sp.rotate_y(delta * 1.6)
+	_dmg_t -= delta
+	if _dmg_t <= 0.0:
+		_dmg_t = 0.5
+		_update_damage_fx()
+
+
+## Badly damaged vehicles and buildings smoke, and burn when nearly dead.
+func _update_damage_fx() -> void:
+	if Vfx.inst == null or armor == "infantry" or def.get("decor", false) or invulnerable:
+		return
+	var ratio := hp / maxf(max_hp, 1.0)
+	var smoking := alive and ratio < 0.5 and model != null and model.visible
+	var burning := smoking and ratio < 0.25
+	if smoking and _smoke == null:
+		_smoke = Vfx.inst.make_trail("burn_smoke", self, 14 if is_structure else 8, 2.6)
+		if _smoke:
+			_smoke.position = _damage_spot()
+	elif not smoking and _smoke != null:
+		Vfx.inst.release_trail(_smoke)
+		_smoke = null
+	if burning and _fire == null:
+		_fire = Vfx.inst.make_trail("burn_fire", self, 12 if is_structure else 7, 0.7)
+		if _fire:
+			_fire.position = _damage_spot() + Vector3(0, -0.15, 0)
+			var l := OmniLight3D.new()
+			l.light_color = Color(1.0, 0.5, 0.18)
+			l.light_energy = 1.6
+			l.omni_range = 3.0 if is_structure else 2.2
+			l.position = Vector3(0, 0.3, 0)
+			l.distance_fade_enabled = true
+			l.distance_fade_begin = LightRig.FADE_BEGIN
+			_fire.add_child(l)
+	elif not burning and _fire != null:
+		Vfx.inst.release_trail(_fire)
+		_fire = null
+	if _fire:
+		var fl := _fire.get_child(0) as OmniLight3D
+		if fl:
+			fl.light_energy = 1.2 + randf() * 0.8
+
+
+func _damage_spot() -> Vector3:
+	var h := bar_height * 0.75
+	if is_structure:
+		return Vector3(randf_range(-0.3, 0.3) * radius, h, randf_range(-0.3, 0.3) * radius)
+	return Vector3(0, h, -radius * 0.3)
 
 
 func _make_ring() -> void:
@@ -241,15 +300,18 @@ func fire(t: Entity) -> void:
 	var yaw := atan2(t.position.x - position.x, t.position.z - position.z)
 	var fwd := Vector3(sin(yaw), 0, cos(yaw))
 	var from := position + Vector3(0, muzzle_height, 0) + fwd * (radius * 0.8)
-	var dmg := float(weapon.get("damage", 10)) * rank_value("rank_damage_mult")
+	var dmg := float(weapon.get("damage", 10)) * rank_value("rank_damage_mult") * _difficulty_mult("damage")
 	if def.get("cloak", false):
 		decloak_until = G.elapsed + 1.5
 	var kind: String = weapon.get("projectile", "tracer")
 	Sfx.weapon(kind, from, dmg)
+	var hit := t.position + Vector3(0, t.hit_height(), 0)
+	var beam_col := Color(1.0, 0.3, 0.9) if model_faction() == "veil" else Color(0.5, 0.9, 1.0)
+	Fx.flash(from, (hit - from).normalized(), kind, dmg, beam_col)
 	if kind == "laser" or kind == "none":
-		var hit := t.position + Vector3(0, t.hit_height(), 0)
 		if kind == "laser":
-			Fx.beam(from, hit, Color(1.0, 0.3, 0.9) if model_faction() == "veil" else Color(0.5, 0.9, 1.0))
+			Fx.beam(from, hit, beam_col, 0.06, 0.22)
+			Fx.impact(hit, "laser", beam_col)
 		else:
 			Fx.impact(hit, "tracer")
 		var splash := float(weapon.get("splash", 0.0))
@@ -261,7 +323,6 @@ func fire(t: Entity) -> void:
 	var p := Projectile.new()
 	G.fx_root.add_child(p)
 	p.launch(from, t, weapon, dmg, self)
-	Fx.flash(from)
 
 
 func take_damage(amount: float, warhead: String, attacker: Entity) -> void:

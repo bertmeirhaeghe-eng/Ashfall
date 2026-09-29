@@ -20,6 +20,8 @@ var controller: InputController
 var hud: HUD
 var world: Node3D
 var fx_root: Node3D
+var weather: Weather           # rain / snow / ion storm, lightning flashes
+var darkness := 0.0            # 0 daylight .. 1 night: how strongly unit and building lights shine
 var mission: Mission
 
 var players: Array = []    # Array of PlayerState, index == team id
@@ -60,6 +62,8 @@ func reset() -> void:
 	hud = null
 	world = null
 	fx_root = null
+	weather = null
+	darkness = 0.0
 	mission = null
 	blue_allowed = true
 	air_grounded = false

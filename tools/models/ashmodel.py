@@ -23,7 +23,7 @@ import numpy as np
 import trimesh
 
 SLOTS = ["body", "panel", "dark", "metal", "team", "glow", "glass", "lamp",
-         "tib", "concrete", "hazard", "red"]
+         "tib", "concrete", "hazard", "red", "foliage"]
 
 
 # ------------------------------------------------------------------ transforms
@@ -324,6 +324,34 @@ def load_stl(path, forward, height=None, length=None, width=None, drop=None):
     mn, mx = m.bounds
     m.apply_translation([-(mn[0] + mx[0]) / 2, -mn[1], -(mn[2] + mx[2]) / 2])
     return m
+
+
+# ------------------------------------------------------------------ OBJ import
+def load_env(path, height=None, width=None):
+    """Load a multi-object, Y-up environment prop (tools/models/src/environment/,
+    already Godot-oriented, converted from purchased/found FBX assets) as
+    {part_name: mesh}. Scaled so the combined bounds are `height` tall or
+    `width` wide, sitting on y=0 and centred in XZ."""
+    scene = trimesh.load(path, process=False, force="scene", split_objects=True)
+    parts = dict(scene.geometry)
+    for m in parts.values():
+        # converted assets are often a kit of many small, independently
+        # authored pieces (fence boards, panels...) with inconsistent or
+        # inward-facing winding; orient each disconnected piece outward so
+        # backface culling doesn't turn it invisible from outside.
+        trimesh.repair.fix_normals(m, multibody=True)
+    mn = np.min([m.bounds[0] for m in parts.values()], axis=0)
+    mx = np.max([m.bounds[1] for m in parts.values()], axis=0)
+    ext = mx - mn
+    s = height / ext[1] if height else width / ext[0]
+    for m in parts.values():
+        m.apply_scale(s)
+    mn = np.min([m.bounds[0] for m in parts.values()], axis=0)
+    mx = np.max([m.bounds[1] for m in parts.values()], axis=0)
+    off = np.array([-(mn[0] + mx[0]) / 2, -mn[1], -(mn[2] + mx[2]) / 2])
+    for m in parts.values():
+        m.apply_translation(off)
+    return parts
 
 
 def split_components(mesh):

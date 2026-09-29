@@ -1,7 +1,6 @@
 class_name OptionsPanel
 extends PanelContainer
-## Options: music / sound effects / speech volume, the game language and the
-## graphics quality.
+## Options: music / sound effects / speech volume and the game language.
 ## Used by the main menu and by the in-game menu.
 
 signal closed
@@ -10,6 +9,8 @@ const GOLD := Color(0.85, 0.66, 0.2)
 
 var _value_labels := {}
 var _lang_btn: OptionButton
+var _gfx_btn: OptionButton
+var _difficulty_btn: OptionButton
 
 
 func _ready() -> void:
@@ -71,15 +72,34 @@ func _ready() -> void:
 	var gl := Label.new()
 	gl.text = "Graphics quality"
 	grid.add_child(gl)
-	var gfx_btn := OptionButton.new()
-	gfx_btn.custom_minimum_size = Vector2(190, 0)
-	for i in Settings.QUALITIES.size():
-		var q: Array = Settings.QUALITIES[i]
-		gfx_btn.add_item(q[1], i)
-		if q[0] == Settings.quality:
-			gfx_btn.select(i)
-	gfx_btn.item_selected.connect(func(i: int): Settings.set_quality(Settings.QUALITIES[i][0]))
-	grid.add_child(gfx_btn)
+	_gfx_btn = OptionButton.new()
+	_gfx_btn.custom_minimum_size = Vector2(190, 0)
+	for i in Settings.GRAPHICS_LEVELS.size():
+		_gfx_btn.add_item(tr(Settings.GRAPHICS_LEVELS[i]), i)
+	_gfx_btn.select(Settings.graphics)
+	_gfx_btn.item_selected.connect(_on_graphics)
+	grid.add_child(_gfx_btn)
+	grid.add_child(Control.new())
+
+	var dl := Label.new()
+	dl.text = "Difficulty"
+	grid.add_child(dl)
+	_difficulty_btn = OptionButton.new()
+	_difficulty_btn.custom_minimum_size = Vector2(190, 0)
+	for i in Settings.DIFFICULTIES.size():
+		_difficulty_btn.add_item(tr(Settings.DIFFICULTIES[i]), i)
+	_difficulty_btn.select(Settings.difficulty)
+	_difficulty_btn.item_selected.connect(_on_difficulty)
+	grid.add_child(_difficulty_btn)
+	grid.add_child(Control.new())
+
+	var ml := Label.new()
+	ml.text = "Battlefield mist"
+	grid.add_child(ml)
+	var mist_btn := CheckButton.new()
+	mist_btn.button_pressed = Settings.mist
+	mist_btn.toggled.connect(_on_mist)
+	grid.add_child(mist_btn)
 	grid.add_child(Control.new())
 
 	var back := Button.new()
@@ -104,6 +124,21 @@ func _on_volume_released(_changed: bool, bus_name: String) -> void:
 		"Voice":
 			Voice.stop_all()
 			Voice.say("eva", "Welcome back, Commander.")
+
+
+func _on_graphics(index: int) -> void:
+	Settings.set_graphics(index)
+	Sfx.ui("confirm")
+
+
+func _on_difficulty(index: int) -> void:
+	Settings.set_difficulty(index)
+	Sfx.ui("confirm")
+
+
+func _on_mist(on: bool) -> void:
+	Settings.set_mist(on)
+	Sfx.ui("click")
 
 
 func _on_language(index: int) -> void:

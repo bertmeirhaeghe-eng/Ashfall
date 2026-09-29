@@ -18,6 +18,7 @@ var target_yaw := 0.0
 var edge_scroll := true
 var bounds := Rect2(0, 0, 80, 80)
 var _mmb := false
+var _shake := 0.0            # current jolt strength, decays quickly
 
 
 func _ready() -> void:
@@ -101,6 +102,14 @@ func _process(delta: float) -> void:
 	_update_boom()
 
 
+## Jolts the view (explosions, cannon fire, lightning). Distant blasts shake less.
+func shake(amount: float, at := Vector3.INF) -> void:
+	if at != Vector3.INF:
+		var d := Vector2(at.x - position.x, at.z - position.z).length()
+		amount *= clampf(1.0 - d / (zoom * 1.6 + 8.0), 0.0, 1.0)
+	_shake = minf(0.6, maxf(_shake, amount))
+
+
 func _clamp() -> void:
 	position.x = clampf(position.x, bounds.position.x, bounds.end.x)
 	position.z = clampf(position.z, bounds.position.y, bounds.end.y)
@@ -111,6 +120,14 @@ func _update_boom() -> void:
 	var p := deg_to_rad(PITCH_DEG)
 	cam.position = Vector3(0.0, sin(p) * zoom, cos(p) * zoom)
 	cam.rotation = Vector3(-p, 0.0, 0.0)
+	if _shake > 0.001:
+		var t := Time.get_ticks_msec() * 0.001
+		cam.h_offset = (sin(t * 61.0) + sin(t * 37.0 + 1.3) * 0.6) * _shake * 0.5
+		cam.v_offset = (sin(t * 53.0 + 0.7) + sin(t * 29.0) * 0.6) * _shake * 0.5
+		_shake = maxf(0.0, _shake - get_process_delta_time() * (1.2 + _shake * 4.0))
+	elif cam.h_offset != 0.0 or cam.v_offset != 0.0:
+		cam.h_offset = 0.0
+		cam.v_offset = 0.0
 
 
 ## Mouse position -> point on the terrain.

@@ -15,6 +15,7 @@ uniform vec3 dust : source_color = vec3(0.5, 0.4, 0.26);
 uniform vec3 scrub : source_color = vec3(0.16, 0.17, 0.11);
 uniform vec3 rock_light : source_color = vec3(0.3, 0.28, 0.25);
 uniform vec3 rock_dark : source_color = vec3(0.05, 0.045, 0.04);
+uniform float wetness = 0.0;   // rain: darker soil, glossy puddles that catch every light
 
 varying vec3 wpos;
 varying vec3 wnorm;
@@ -68,7 +69,17 @@ void fragment() {
 	col = mix(col, cm.rgb * (0.75 + 0.5 * grain), cm.a * (1.0 - rock_w));
 
 	col *= mix(0.45, 1.0, vdata.g);
+	float rough = 0.95;
+	float spec = 0.2;
+	if (wetness > 0.0) {
+		// puddles collect in the flat, low patches; rock just gets a wet sheen
+		float puddle = smoothstep(0.5, 0.66, mid * 0.6 + small * 0.4) * (1.0 - rock_w) * wetness;
+		col *= mix(1.0, 0.62, wetness);
+		col = mix(col, col * 0.45 + vec3(0.01, 0.012, 0.016), puddle);
+		rough = mix(mix(0.95, 0.6, wetness), 0.22, puddle);
+		spec = mix(0.2, 0.45, max(puddle, wetness * 0.4));
+	}
 	ALBEDO = col;
-	ROUGHNESS = 0.95;
-	SPECULAR = 0.2;
+	ROUGHNESS = rough;
+	SPECULAR = spec;
 }

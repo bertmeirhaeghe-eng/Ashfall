@@ -39,7 +39,10 @@ func objective_preview() -> Array:
 	return []
 
 
-## Lighting / sky / weather for this mission.
+## Lighting / sky / weather for this mission: sky_*, sun_*, ambient, fog_*,
+## exposure, glow, saturation, weather ("rain", "snow", "ash", "spores"),
+## storm ("ion" lightning storm, "dry" distant lightning) and lights (0..1:
+## how strongly unit and building lights shine; guessed from the sun if absent).
 func theme() -> Dictionary:
 	return {}
 

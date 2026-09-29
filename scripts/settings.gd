@@ -1,7 +1,6 @@
 extends Node
 ## Player options (autoload "Settings", loaded first): music / sound-effect /
-## speech volume, the game language and the graphics quality. Saved in
-## user://ashfall_settings.cfg.
+## speech volume and the game language. Saved in user://ashfall_settings.cfg.
 ##
 ## Language: every user-facing string in the game is written in English and
 ## goes through Godot's tr(). Dutch comes from data/lang/nl.json, a flat
@@ -10,7 +9,6 @@ extends Node
 
 signal changed
 signal language_changed
-signal graphics_changed
 
 const PATH := "user://ashfall_settings.cfg"
 const LANGUAGES := [["en", "English"], ["nl", "Nederlands"]]
@@ -18,24 +16,30 @@ const LANG_FILES := {"nl": "res://data/lang/nl.json"}
 ## Audio buses: name -> default volume (0..100)
 const BUSES := {"Music": 70, "Sfx": 80, "Voice": 90}
 
-## Graphics presets. render_h is the most pixel rows the 3D scene is drawn at:
-## a taller window (fullscreen on a 1440p or 4K monitor) draws the 3D scene at
-## that height and FSR upscales it, so the terrain shader, SSAO, glow and MSAA
-## cost about the same at any window size. The HUD stays at full resolution.
-## 0 = always native resolution.
-const QUALITIES := [["low", "Low"], ["medium", "Medium"], ["high", "High"]]
-const QUALITY := {
-	"low": {"render_h": 720, "msaa": Viewport.MSAA_DISABLED, "ssao": false,
-			"ssao_quality": RenderingServer.ENV_SSAO_QUALITY_VERY_LOW, "shadow_atlas": 2048, "soft_shadows": false},
-	"medium": {"render_h": 1080, "msaa": Viewport.MSAA_2X, "ssao": true,
-			"ssao_quality": RenderingServer.ENV_SSAO_QUALITY_LOW, "shadow_atlas": 4096, "soft_shadows": true},
-	"high": {"render_h": 0, "msaa": Viewport.MSAA_2X, "ssao": true,
-			"ssao_quality": RenderingServer.ENV_SSAO_QUALITY_MEDIUM, "shadow_atlas": 4096, "soft_shadows": true},
-}
-
 var volumes := {"Music": 70, "Sfx": 80, "Voice": 90}
 var language := "en"
-var quality := "medium"
+## Graphics quality: 0 low, 1 medium, 2 high (particles, dynamic lights,
+## volumetric fog, shadows). Those take effect when a mission starts; the
+## render resolution, MSAA, SSAO and shadow filtering (RENDER) apply at once.
+var graphics := 2
+## Low white mist drifting over the battlefield (switchable live).
+var mist := true
+const GRAPHICS_LEVELS := ["Low", "Medium", "High"]
+## Per graphics level. render_h is the most pixel rows the 3D scene is drawn
+## at: a taller window (fullscreen on a 1440p or 4K monitor) draws the 3D scene
+## at that height and FSR upscales it, so the terrain shader, lights, SSAO,
+## glow and MSAA cost about the same at any window size. The HUD stays sharp.
+const RENDER := [
+	{"render_h": 720, "msaa": Viewport.MSAA_DISABLED, "ssao": RenderingServer.ENV_SSAO_QUALITY_VERY_LOW,
+			"shadow_atlas": 2048, "shadow_filter": RenderingServer.SHADOW_QUALITY_HARD},
+	{"render_h": 1080, "msaa": Viewport.MSAA_2X, "ssao": RenderingServer.ENV_SSAO_QUALITY_LOW,
+			"shadow_atlas": 4096, "shadow_filter": RenderingServer.SHADOW_QUALITY_SOFT_VERY_LOW},
+	{"render_h": 1440, "msaa": Viewport.MSAA_2X, "ssao": RenderingServer.ENV_SSAO_QUALITY_MEDIUM,
+			"shadow_atlas": 4096, "shadow_filter": RenderingServer.SHADOW_QUALITY_SOFT_LOW},
+]
+## Mission AI difficulty: 0 Easy, 1 Medium (today's tuning), 2 Hard.
+var difficulty := 1
+const DIFFICULTIES := ["Easy", "Medium", "Hard"]
 var _tables := {}   # locale -> Translation
 
 
@@ -56,12 +60,14 @@ func _ready() -> void:
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--lang="):
 			language = a.get_slice("=", 1)
+		if a.begins_with("--graphics="):
+			graphics = clampi(int(a.get_slice("=", 1)), 0, 2)
 	var env := OS.get_environment("ASHFALL_LANG")
 	if env != "":
 		language = env
 	_apply()
 	get_tree().root.size_changed.connect(_fit_render_scale)
-	_apply_graphics()
+	_apply_render()
 
 
 func _load_table(t: Translation, path: String) -> bool:
@@ -106,9 +112,9 @@ func _load() -> void:
 	for b in BUSES.keys():
 		volumes[b] = clampi(int(cf.get_value("audio", b.to_lower(), BUSES[b])), 0, 100)
 	language = str(cf.get_value("game", "language", "en"))
-	quality = str(cf.get_value("graphics", "quality", "medium"))
-	if not QUALITY.has(quality):
-		quality = "medium"
+	graphics = clampi(int(cf.get_value("video", "quality", 2)), 0, 2)
+	mist = bool(cf.get_value("video", "mist", true))
+	difficulty = clampi(int(cf.get_value("game", "difficulty", 1)), 0, 2)
 
 
 func save() -> void:
@@ -118,7 +124,9 @@ func save() -> void:
 	for b in BUSES.keys():
 		cf.set_value("audio", b.to_lower(), volumes[b])
 	cf.set_value("game", "language", language)
-	cf.set_value("graphics", "quality", quality)
+	cf.set_value("game", "difficulty", difficulty)
+	cf.set_value("video", "quality", graphics)
+	cf.set_value("video", "mist", mist)
 	cf.save(PATH)
 
 
@@ -144,6 +152,43 @@ func set_volume(bus_name: String, value: int) -> void:
 	changed.emit()
 
 
+func set_graphics(level: int) -> void:
+	graphics = clampi(level, 0, 2)
+	_apply_render()
+	changed.emit()
+
+
+func _apply_render() -> void:
+	var r: Dictionary = RENDER[graphics]
+	get_tree().root.msaa_3d = r["msaa"]
+	# half-size SSAO; the other values are Godot's defaults
+	RenderingServer.environment_set_ssao_quality(r["ssao"], true, 0.5, 2, 50.0, 300.0)
+	RenderingServer.directional_shadow_atlas_set_size(r["shadow_atlas"], true)
+	RenderingServer.directional_soft_shadow_filter_set_quality(r["shadow_filter"])
+	RenderingServer.positional_soft_shadow_filter_set_quality(r["shadow_filter"])
+	_fit_render_scale()
+
+
+## Keep the 3D render height at or under the level's cap as the window resizes.
+func _fit_render_scale() -> void:
+	var root := get_tree().root
+	var cap: int = RENDER[graphics]["render_h"]
+	var h := root.size.y
+	var s := 1.0 if h <= cap else float(cap) / float(h)
+	root.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR if s < 0.999 else Viewport.SCALING_3D_MODE_BILINEAR
+	root.scaling_3d_scale = s
+
+
+func set_mist(on: bool) -> void:
+	mist = on
+	changed.emit()
+
+
+func set_difficulty(level: int) -> void:
+	difficulty = clampi(level, 0, 2)
+	changed.emit()
+
+
 func set_language(code: String) -> void:
 	if code == language or not has_language(code):
 		return
@@ -151,41 +196,6 @@ func set_language(code: String) -> void:
 	_apply()
 	changed.emit()
 	language_changed.emit()
-
-
-func set_quality(code: String) -> void:
-	if code == quality or not QUALITY.has(code):
-		return
-	quality = code
-	_apply_graphics()
-	changed.emit()
-
-
-## A value of the current graphics preset (see QUALITY).
-func gfx(key: String):
-	return QUALITY[quality][key]
-
-
-func _apply_graphics() -> void:
-	var root := get_tree().root
-	root.msaa_3d = gfx("msaa")
-	# half-size SSAO; the fade distances are Godot's defaults
-	RenderingServer.environment_set_ssao_quality(gfx("ssao_quality"), true, 0.5, 2, 50.0, 300.0)
-	RenderingServer.directional_shadow_atlas_set_size(gfx("shadow_atlas"), true)
-	RenderingServer.directional_soft_shadow_filter_set_quality(
-			RenderingServer.SHADOW_QUALITY_SOFT_LOW if gfx("soft_shadows") else RenderingServer.SHADOW_QUALITY_HARD)
-	_fit_render_scale()
-	graphics_changed.emit()
-
-
-## Keep the 3D render height at or under the preset's cap as the window resizes.
-func _fit_render_scale() -> void:
-	var root := get_tree().root
-	var cap: int = gfx("render_h")
-	var h := root.size.y
-	var s := 1.0 if cap <= 0 or h <= cap else float(cap) / float(h)
-	root.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR if s < 0.999 else Viewport.SCALING_3D_MODE_BILINEAR
-	root.scaling_3d_scale = s
 
 
 func is_dutch() -> bool:

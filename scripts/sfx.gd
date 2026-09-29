@@ -17,6 +17,8 @@ var _bank := {}        # name -> [AudioStreamWAV]
 var _pool: Array = []
 var _next := 0
 var _ui: AudioStreamPlayer
+var _thunder: Array = []   # non-positional players: thunder rolls across the whole sky
+var _ambience: AudioStreamPlayer
 var _last := {}        # name -> time last played
 var _rng := RandomNumberGenerator.new()
 
@@ -37,6 +39,14 @@ func _ready() -> void:
 	_ui.bus = "Sfx"
 	_ui.max_polyphony = 4
 	add_child(_ui)
+	for i in 3:
+		var t := AudioStreamPlayer.new()
+		t.bus = "Sfx"
+		add_child(t)
+		_thunder.append(t)
+	_ambience = AudioStreamPlayer.new()
+	_ambience.bus = "Sfx"
+	add_child(_ambience)
 
 
 # ================================================================ public
@@ -94,6 +104,44 @@ func weapon(kind: String, pos: Vector3, damage: float) -> void:
 		_: play_at("claw", pos, -6.0)
 
 
+## Thunder after a lightning flash: the crack arrives later (and the roll is
+## deeper and softer) the further away the strike was.
+func thunder(pos: Vector3) -> void:
+	var cam := get_viewport().get_camera_3d()
+	var d := cam.global_position.distance_to(pos) if cam else 40.0
+	var near := d < 38.0
+	var delay := clampf((d - 20.0) / 40.0, 0.0, 3.5)
+	var vol := clampf(2.0 - d * 0.08, -16.0, 2.0)
+	var stream := _variant("thunder_near" if near else "thunder_far")
+	var pitch := _rng.randf_range(0.85, 1.1) * (1.0 if near else 0.85)
+	get_tree().create_timer(delay, false).timeout.connect(func():
+		var p: AudioStreamPlayer = _thunder[0]
+		for t in _thunder:
+			if not t.playing:
+				p = t
+				break
+		p.stream = stream
+		p.volume_db = vol
+		p.pitch_scale = pitch
+		p.play())
+
+
+## Looping background ambience ("rain", "" to stop).
+func ambience(sound: String, volume_db := -10.0) -> void:
+	if sound == "":
+		_ambience.stop()
+		return
+	_ambience.stream = _variant(sound + "_loop")
+	_ambience.volume_db = volume_db
+	_ambience.play()
+
+
+## Synthesises sounds ahead of time so the first play does not hitch.
+func prepare(sounds: Array) -> void:
+	for snd in sounds:
+		_variant(snd)
+
+
 func explosion(pos: Vector3, size: float) -> void:
 	if size >= 1.3:
 		play_at("explode_big", pos, 0.0, clampf(1.3 / size, 0.6, 1.1))
@@ -141,13 +189,24 @@ func _make(sound: String, variant: int) -> AudioStreamWAV:
 			s = _boom(r, 2.6, 0.8, 1300.0, 90.0, 45.0, 24.0, 1.3)
 			_mix(s, _sweep(r, 1.2, 3200.0, 90.0, 0.5, false), 0.7)
 			_crackle(r, s, 1.8, 140)
+		"thunder_near":
+			s = _rumble(r, 4.5, 0.35)
+			_mix(s, _shot(r, 0.25, 0.05, 6000.0, 60.0, 0.8), 1.4)
+			_crackle(r, s, 1.4, 160)
+		"thunder_far": s = _rumble(r, 5.5, 1.1)
+		"rain_loop": s = _rain(r, 4.0)
 		"place": s = _boom(r, 0.35, 0.06, 600.0, 200.0, 110.0, 60.0, 0.8)
 		"click": s = _tone([1250.0], 0.05, 0.012)
 		"confirm": s = _tone([660.0, 990.0], 0.16, 0.05)
 		"error": s = _tone([196.0, 150.0], 0.24, 0.09, true)
 		"sell": s = _tone([1480.0, 1975.0], 0.2, 0.06)
 		_: s = _tone([440.0], 0.1, 0.03)
-	return _to_wav(s)
+	var w := _to_wav(s)
+	if sound.ends_with("_loop"):
+		w.loop_mode = AudioStreamWAV.LOOP_FORWARD
+		w.loop_begin = 0
+		w.loop_end = s.size()
+	return w
 
 
 func _to_wav(s: PackedFloat32Array) -> AudioStreamWAV:
@@ -279,6 +338,49 @@ func _flame(r: RandomNumberGenerator, secs: float) -> PackedFloat32Array:
 		lp += (r.randf_range(-1.0, 1.0) - lp) * 0.12
 		var flutter := 0.7 + 0.3 * sin(TAU * 23.0 * t + r.randf() * 0.3)
 		s[i] = lp * flutter * minf(1.0, t / 0.06) * exp(-t / 0.25)
+	return s
+
+
+## Thunder roll: deep low-passed noise swelling in a few random waves.
+func _rumble(r: RandomNumberGenerator, secs: float, attack: float) -> PackedFloat32Array:
+	var s := _buf(secs)
+	var lp := 0.0
+	var lp2 := 0.0
+	var swells: Array = []
+	for i in 5:
+		swells.append([r.randf_range(0.0, secs * 0.6), r.randf_range(0.4, 1.2), r.randf_range(0.4, 1.0)])
+	for i in s.size():
+		var t := float(i) / RATE
+		var k := t / secs
+		var a := 1.0 - exp(-TAU * lerpf(420.0, 90.0, sqrt(k)) / RATE)
+		lp += (r.randf_range(-1.0, 1.0) - lp) * a
+		lp2 += (lp - lp2) * a
+		var env := minf(1.0, t / attack) * pow(1.0 - k, 1.6)
+		var sw := 0.35
+		for w in swells:
+			var dt: float = t - float(w[0])
+			if dt > 0.0:
+				sw += float(w[2]) * exp(-dt / float(w[1])) * minf(1.0, dt / 0.08)
+		s[i] = lp2 * 3.0 * env * sw
+	return s
+
+
+## Steady rain: hissing noise with a patter of drops (loops seamlessly).
+func _rain(r: RandomNumberGenerator, secs: float) -> PackedFloat32Array:
+	var s := _buf(secs)
+	var lp := 0.0
+	var lp2 := 0.0
+	for i in s.size():
+		var n := r.randf_range(-1.0, 1.0)
+		lp += (n - lp) * 0.35
+		lp2 += (lp - lp2) * 0.02
+		s[i] = (lp - lp2) * 0.35 + lp2 * 0.6
+	for d in int(secs * 90):
+		var at := r.randi_range(0, s.size() - 200)
+		var amp := r.randf_range(0.05, 0.25)
+		var hz := r.randf_range(1800.0, 4200.0)
+		for j in 160:
+			s[at + j] += sin(TAU * hz * j / RATE) * amp * exp(-j / 30.0)
 	return s
 
 

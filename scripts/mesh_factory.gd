@@ -33,6 +33,11 @@ static func mat(color: Color, emissive := 0.0, rough := 0.65, metal := 0.25, gri
 	m.roughness = rough
 	m.metallic = metal
 	m.vertex_color_use_as_albedo = true  # baked ambient occlusion
+	# a lit contour on every unit/building edge, so silhouettes read against
+	# dark terrain and shadow the way they do lit from the side in TS/RA2
+	m.rim_enabled = true
+	m.rim = 0.3
+	m.rim_tint = 0.35
 	if grime:
 		# weathered, noisy panels like TS voxel shading
 		m.albedo_texture = _grime_texture()
@@ -79,9 +84,11 @@ static func _grime_texture() -> Texture2D:
 static func palette(faction: String) -> Dictionary:
 	match faction:
 		"veil":
+			# lifted a touch off pure gunmetal-black: enough value contrast to
+			# read against dark terrain and shadow, still the darkest faction
 			return {
-				"body": Color(0.2, 0.2, 0.22), "panel": Color(0.32, 0.31, 0.32), "trim": Color(0.55, 0.08, 0.06),
-				"dark": Color(0.07, 0.07, 0.08), "metal": Color(0.34, 0.34, 0.36),
+				"body": Color(0.25, 0.25, 0.28), "panel": Color(0.37, 0.36, 0.38), "trim": Color(0.55, 0.08, 0.06),
+				"dark": Color(0.11, 0.11, 0.13), "metal": Color(0.38, 0.38, 0.41),
 				"concrete": Color(0.3, 0.29, 0.29), "hazard": Color(0.62, 0.07, 0.05),
 			}
 		"outcast":
@@ -101,18 +108,23 @@ static func palette(faction: String) -> Dictionary:
 				"body": Color(0.62, 0.58, 0.5), "panel": Color(0.5, 0.47, 0.41), "trim": Color(0.55, 0.35, 0.25),
 				"dark": Color(0.25, 0.23, 0.2), "metal": Color(0.45, 0.44, 0.42),
 				"concrete": Color(0.46, 0.44, 0.4), "hazard": Color(0.7, 0.55, 0.25),
+				"foliage": Color(0.22, 0.34, 0.16),
 			}
 	return {
 		"body": Color(0.56, 0.56, 0.5), "panel": Color(0.42, 0.44, 0.4), "trim": Color(0.85, 0.66, 0.2),
 		"dark": Color(0.15, 0.15, 0.14), "metal": Color(0.45, 0.46, 0.48),
 		"concrete": Color(0.46, 0.45, 0.41), "hazard": Color(0.85, 0.66, 0.2),
+		"foliage": Color(0.22, 0.34, 0.16),
 	}
 
 
 static func slot_material(slot: String, pal: Dictionary, team_color: Color) -> Material:
 	match slot:
 		"team":
-			return mat(team_color.darkened(0.15), 0.0, 0.5, 0.3)
+			# a faint glow on the team-colour trim: reads as a lit remap
+			# stripe (TS/RA2 style) and helps a unit's allegiance pop at a
+			# glance, even in shadow
+			return mat(team_color.darkened(0.15), 0.15, 0.5, 0.3, false)
 		"glow":
 			return mat(team_color, 0.9, 0.5, 0.0, false)
 		"glass":
@@ -198,6 +210,18 @@ static func mesh(model: String) -> Mesh:
 	if data.is_empty():
 		return BoxMesh.new()
 	return data["parts"][0]["mesh"]
+
+
+## Named single-mesh parts of a model with more than one material, for a
+## terrain prop drawn as several colour-tinted MultiMeshes (a tree's trunk
+## and canopy; see map_grid.gd _build_forest).
+static func parts(model: String) -> Dictionary:
+	var data := _load_model(model, "")
+	var out := {}
+	for p in data.get("parts", []):
+		if p["mesh"] != null:
+			out[p["name"]] = p["mesh"]
+	return out
 
 
 ## Parses an .amdl file once; returns {"parts": [{name, parent, pivot, mesh, slots}], "meta"}.

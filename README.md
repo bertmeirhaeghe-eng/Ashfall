@@ -14,24 +14,46 @@ soundtrack round it out.
 every mission (`user://ashfall_campaign.json`), so **Continue Game** returns you to the briefing of the
 mission you reached, with every story choice you have made so far.
 
-## Options: volume, language and graphics
+## Options: volume and language
 **Options** (main menu, or **Esc** in a mission) has sliders for **music**, **sound effects** and
-**speech** volume, the **language** (**English** or **Nederlands**, Dutch) and the **graphics
-quality**. Settings are saved in `user://ashfall_settings.cfg`.
-
-Graphics quality caps the resolution the 3D scene is drawn at and upscales it with AMD FSR, so a
-fullscreen window on a large monitor no longer multiplies the cost of the terrain shader, SSAO,
-glow and MSAA (the HUD is always drawn at full resolution):
-- **Low**: 3D at up to 720 lines, no MSAA, no SSAO, hard shadows with a smaller shadow map.
-- **Medium** (default): 3D at up to 1080 lines, 2x MSAA, half-size low-quality SSAO, soft shadows.
-- **High**: 3D at native resolution, 2x MSAA, medium-quality SSAO, soft shadows.
-
-The language changes everything at once: menus, the HUD, tooltips, unit and building names, objectives, subtitles, briefings, the story, and all the spoken voices.
+**speech** volume, and the **language**: **English** or **Nederlands** (Dutch). Settings are saved
+in `user://ashfall_settings.cfg`. The language changes everything at once: menus, the HUD, tooltips,
+unit and building names, objectives, subtitles, briefings, the story, and all the spoken voices.
 
 Every string is written in English in the code and goes through Godot's `tr()`; the Dutch text lives
 in `data/lang/nl.json` (English -> Dutch). `python3 tools/lang/extract_strings.py --verbose` lists any
 string in the code without a Dutch entry, and the Dutch test runs (below) report any text shown
 untranslated at runtime.
+
+## Graphics: effects, lights and weather
+- **Particles** (`scripts/vfx.gd`, shaders in `shaders/fx/`): pooled GPU-particle effects with custom
+  shaders: noise-shaded fireballs that burn out, lit billowing smoke with soft edges, velocity-stretched
+  sparks and debris, dust rings, embers. Every shot has a muzzle flash (randomised flame petals and a
+  star, a flash of light and gun smoke; flamethrower jets, laser glow, rocket back-blast); impacts throw
+  sparks and dirt; explosions add a shockwave, secondary blasts, a smoke column, a cooling scorch mark
+  (a decal on the ground) and a camera jolt. Rockets trail smoke and fire. Damaged vehicles and
+  buildings smoke, and burn when nearly destroyed.
+- **Lights** (`scripts/light_rig.gd`): at night every unit and building lights the battlefield.
+  Unit lights are soft, short pools around each unit. Vehicles have headlights and tail lights, infantry carry flashlights (Outcasts carry torches,
+  cyborgs have red optics), aircraft blink nav lights and sweep a belly searchlight, hovers glow
+  underneath, harvesters and the MCV turn amber beacons. Buildings have floodlights, window glow and
+  aviation lights; defense towers sweep searchlights that lock onto their target. Building lights
+  stutter on low power and go dark when the power is cut. Each theme's `lights` value (0 day .. 1 night)
+  sets how strongly they shine.
+- **Weather** (`scripts/weather.gd`): rain (with splashes and wet, glossy ground), snow, ash and
+  spores; the theme's `storm` key adds an **ion storm** (Mission 8: branching blue-violet lightning
+  strikes that light up the whole map, sheet lightning, thunder that arrives late when the strike is
+  far, St. Elmo's fire crackling on tall buildings) or distant dry lightning (Mission 2). The glass
+  storm's damaging bolts use the same lightning.
+- **Battlefield mist** (Options, on by default, switches instantly): soft white mist banks drifting
+  low over the whole map, lit by the sun and by every light on the field (`shaders/fx/mist.gdshader`).
+- **Graphics quality** in Options (Low / Medium / High, `--graphics=0..2` on the command line): particle
+  counts, the number of lights, shadows, and on High volumetric fog at night so light beams hang in
+  the air (Medium draws fake beam cones instead). It takes effect at the next mission start.
+  It also caps the resolution the 3D scene is drawn at (Low 720, Medium 1080, High 1440 lines) and
+  upscales with AMD FSR, so fullscreen on a large monitor no longer multiplies the cost of every
+  shader and light; the HUD stays at full resolution. MSAA (off on Low), SSAO quality and shadow
+  filtering follow the level too. These apply immediately.
 
 ## Voices (Kokoro TTS)
 Every voice in the game is synthesised at runtime by **[Kokoro TTS](https://huggingface.co/hexgrad/Kokoro-82M)**
@@ -144,9 +166,12 @@ scripts/map_grid.gd          map painter API, terrain (rock, water, forest, city
 scripts/entity.gd, unit.gd, structure.gd, harvester.gd, player_state.gd, ai_controller.gd
 scripts/hud.gd, overlay.gd, minimap.gd, input_controller.gd, ui/*  interface (ui/options_panel.gd: Options)
 scripts/music.gd             autoload "Music": shuffled soundtrack from music/
+scripts/vfx.gd, fx.gd        particle effects, flash lights, beams, lightning, scorch marks (Fx is the API)
+scripts/light_rig.gd         unit and building lights (headlights, flashlights, floodlights, searchlights)
+scripts/weather.gd           rain / snow / ash / spores, ion storm lightning and thunder
 scripts/mesh_factory.gd      .amdl model loader + primitive models for campaign-only units
 models/, tools/models/       3D models and the generator that builds them
-shaders/                     terrain, crystal and vignette shaders
+shaders/                     terrain, crystal and vignette shaders; shaders/fx/ effect shaders
 music/                       soundtrack
 scripts/dev/test_runner.gd, mission_solver.gd   automated tests
 ```
@@ -162,6 +187,8 @@ ASHFALL_VOICE=kokoro godot --headless --path . --fixed-fps 30 --quit-after 50000
 godot --headless --path . --fixed-fps 30 --quit-after 120000 -- --test=smoke --lang=nl --langcheck \
     | python3 tools/lang/check_runtime.py                                          # Dutch, reports untranslated text
 python3 tools/lang/extract_strings.py --verbose                                    # Dutch entries for every string in the code
+godot --path . -- --test=shot8:3 --fxdemo      # screenshot of a staged night firefight (ASHFALL_SHOT_DIR, ASHFALL_SHOT_ZOOM)
+godot --path . -- --test=shot4:2 --fxboom      # frame sequence of one explosion
 ```
 `--lang=en|nl` (or `ASHFALL_LANG`) forces the language; with `--lang=nl` the voice test uses the Piper voices.
 The scripted solutions take shortcuts (teleporting units, removing targets) but every objective is

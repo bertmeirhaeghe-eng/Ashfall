@@ -48,8 +48,8 @@ func theme() -> Dictionary:
 	return {
 		"sky_top": Color(0.22, 0.26, 0.3), "sky_horizon": Color(0.75, 0.55, 0.4),
 		"ground_horizon": Color(0.35, 0.33, 0.28), "sun_rot": Vector3(-22, 70, 0),
-		"sun_color": Color(1.0, 0.75, 0.55), "sun_energy": 1.0, "ambient": 0.6,
-		"fog_color": Color(0.55, 0.5, 0.45), "fog_density": 0.006, "weather": "ash",
+		"sun_color": Color(1.0, 0.75, 0.55), "sun_energy": 1.25, "ambient": 0.68,
+		"fog_color": Color(0.55, 0.5, 0.45), "fog_density": 0.006, "weather": "ash", "lights": 0.45,
 	}
 
 
@@ -105,12 +105,14 @@ func setup() -> void:
 	# towns, buses and the church
 	for town in TOWNS.keys():
 		var c: Vector2i = TOWNS[town]
-		for off in [Vector2i(-4, -3), Vector2i(2, -4), Vector2i(-3, 3), Vector2i(3, 2)]:
-			building("house", NEUTRAL, c + off)
+		var houses := [Vector2i(-4, -3), Vector2i(2, -4), Vector2i(-3, 3), Vector2i(3, 2)]
+		for i in houses.size():
+			building("house" if i % 2 == 0 else "cottage", NEUTRAL, c + houses[i])
 		var bus := spawn_one("bus", NEUTRAL, c, "bus")
 		buses[town] = bus
 		bus_state[town] = "waiting"
 	building("church", NEUTRAL, CHURCH, "church")
+	building("mapletree", NEUTRAL, CHURCH + Vector2i(-3, -1))
 	# the Veil camp in the forest
 	building("veil_camp", ENEMY, CAMP + Vector2i(-3, -2), "camp")
 	building("veil_camp", ENEMY, CAMP + Vector2i(2, 1), "camp")

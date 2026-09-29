@@ -431,3 +431,36 @@ func _first_structure(def_id: String) -> Structure:
 		if e.alive and e is Structure and e.team == G.local_team and e.def_id == def_id:
 			return e
 	return null
+
+
+# ================================================================ cursor
+
+## Which 3D cursor icon (Cursor3D) fits the current mode / hover target:
+## "arrow" default select, "move", "attack", "sell", "repair", "target"
+## (ability targeting) or "place" (structure ghost, tinted by place_ok()).
+func cursor_kind(pos: Vector2) -> String:
+	match mode:
+		Mode.SELL: return "sell"
+		Mode.REPAIR: return "repair"
+		Mode.ATTACK_MOVE: return "attack"
+		Mode.TARGET: return "target"
+		Mode.PLACE: return "place"
+	var units := _own_units(selection)
+	if units.is_empty():
+		if selection.size() == 1 and is_instance_valid(selection[0]) and selection[0] is Structure \
+				and selection[0].team == G.local_team and not selection[0].produces.is_empty():
+			return "move"   # setting a rally point
+		return "arrow"
+	var t := entity_at(pos)
+	if t == null:
+		return "move"
+	if t.team == G.local_team:
+		return "move"
+	if G.is_enemy(G.local_team, t.team) or t.def.get("targetable", false):
+		return "attack"
+	return "move"
+
+
+## Whether the structure ghost could be placed at its current cell.
+func place_ok() -> bool:
+	return _ghost != null and G.can_place(G.local_team, place_id, _ghost_cell)
