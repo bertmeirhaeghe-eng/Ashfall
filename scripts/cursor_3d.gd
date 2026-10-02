@@ -4,7 +4,8 @@ extends CanvasLayer
 ## into a SubViewport and stamped over the mouse position: an actual model
 ## instead of a bitmap. Icons follow the classic TD-style cursor set (white
 ## pointer / green move diamonds / red attack reticle / gold $ sell coin),
-## plus a cyan + coin for repair, matched from InputController.cursor_kind().
+## plus a cyan + coin for repair and a blue flag for capture / engineer
+## interactions, matched from InputController.cursor_kind().
 ## Only lives in the gameplay scene (added by main.gd); menus keep the OS
 ## pointer.
 
@@ -59,6 +60,7 @@ func _ready() -> void:
 	_icons["arrow"] = _build_arrow()
 	_icons["move"] = _build_move()
 	_icons["attack"] = _build_attack()
+	_icons["capture"] = _build_capture()
 	_icons["sell"] = _build_coin("sell", Color(1.0, 0.82, 0.25), "$")
 	_icons["repair"] = _build_coin("repair", Color(0.35, 0.9, 0.95), "+")
 	for k in _icons.keys():
@@ -214,6 +216,51 @@ func _build_attack() -> Node3D:
 	dot.material_override = mat
 	dot.rotation_degrees.y = 45.0
 	rig.add_child(dot)
+	return rig
+
+
+func _build_capture() -> Node3D:
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.15, 0.35, 0.7)
+	mat.emission_enabled = true
+	mat.emission = Color(0.35, 0.7, 1.0)
+	mat.emission_energy_multiplier = 1.8
+	_mats["capture"] = mat
+	var pole_mat := StandardMaterial3D.new()
+	pole_mat.albedo_color = Color(0.85, 0.85, 0.9)
+	pole_mat.emission_enabled = true
+	pole_mat.emission = Color(0.9, 0.9, 1.0)
+	pole_mat.emission_energy_multiplier = 0.6
+
+	# a flag planted on a ring: pole + pennant standing up, ring flat on the ground
+	var rig := Node3D.new()
+	var ring := MeshInstance3D.new()
+	var tm := TorusMesh.new()
+	tm.inner_radius = 0.34
+	tm.outer_radius = 0.42
+	tm.rings = 6
+	tm.ring_segments = 16
+	ring.mesh = tm
+	ring.material_override = mat
+	rig.add_child(ring)
+
+	var pole := MeshInstance3D.new()
+	var pm := CylinderMesh.new()
+	pm.top_radius = 0.035
+	pm.bottom_radius = 0.035
+	pm.height = 0.8
+	pole.mesh = pm
+	pole.material_override = pole_mat
+	pole.position = Vector3(0, 0.4, 0)
+	rig.add_child(pole)
+
+	var flag := MeshInstance3D.new()
+	var fm := BoxMesh.new()
+	fm.size = Vector3(0.38, 0.24, 0.04)
+	flag.mesh = fm
+	flag.material_override = mat
+	flag.position = Vector3(0.2, 0.66, 0)
+	rig.add_child(flag)
 	return rig
 
 

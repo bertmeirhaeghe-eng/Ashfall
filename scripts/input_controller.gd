@@ -1,7 +1,8 @@
 class_name InputController
 extends Node
 ## Mouse & keyboard command layer (RA2 style):
-##  LMB click/drag  select (Shift adds), double-click selects all of that type on screen
+##  LMB click/drag  select (Shift adds), double-click selects all of that type on screen;
+##                  clicking empty ground keeps the selection (Esc deselects)
 ##  RMB             context order: move / attack / capture / board / harvest / dock / rally
 ##  Ctrl+RMB        force-attack anything that isn't yours
 ##  A + LMB         attack-move        S  stop        D  deploy / unload
@@ -238,35 +239,67 @@ func _ack(units: Array, kind: String) -> void:
 	Voice.unit_ack(own[0].def.get("voice", "infantry"), kind)
 
 
-func entity_at(screen_pos: Vector2) -> Entity:
+## What sits under the cursor. Units are picked against their whole on-screen
+## body (base to top) with a generous margin; when several are close, the one
+## nearest the cursor wins, nudged towards `prefer` ("own" when selecting,
+## "enemy" when giving orders). Structures are hit-tested as 3D boxes, so
+## clicking a building's walls or roof counts, not just its footprint.
+func entity_at(screen_pos: Vector2, prefer := "") -> Entity:
 	var cam: Camera3D = G.camera.cam
 	var best: Entity = null
-	var best_d := 22.0
+	var best_score := INF
 	for e in G.entities:
 		if not e.alive or e is Structure or not e.visible_to(G.local_team) or e.hidden_underground() and e.team != G.local_team:
 			continue
-		var wp: Vector3 = e.position + Vector3(0, e.bar_height * 0.4, 0)
-		if cam.is_position_behind(wp):
+		var base: Vector3 = e.position
+		var top: Vector3 = e.position + Vector3(0, maxf(e.bar_height, 0.4), 0)
+		if cam.is_position_behind(base) or cam.is_position_behind(top):
 			continue
-		var d := cam.unproject_position(wp).distance_to(screen_pos)
-		var lim: float = 14.0 + e.radius * 18.0
-		if d < lim and d < best_d:
-			best_d = d
+		var a := cam.unproject_position(base)
+		var b := cam.unproject_position(top)
+		var d := Geometry2D.get_closest_point_to_segment(screen_pos, a, b).distance_to(screen_pos)
+		# pixel reach grows with the unit's size and how far the camera is zoomed in
+		var body_px: float = maxf(a.distance_to(b), 12.0)
+		var lim: float = 16.0 + e.radius * 20.0 + body_px * 0.25
+		if d > lim:
+			continue
+		var score := d
+		if prefer == "own" and e.team == G.local_team:
+			score -= 10.0
+		elif prefer == "enemy" and G.is_enemy(G.local_team, e.team):
+			score -= 10.0
+		if score < best_score:
+			best_score = score
 			best = e
+	if best:
+		return best
+	var o := cam.project_ray_origin(screen_pos)
+	var n := cam.project_ray_normal(screen_pos)
+	var best_t := INF
+	for e in G.entities:
+		if not (e.alive and e is Structure and e.visible_to(G.local_team)):
+			continue
+		var half := Vector3(e.size.x * 0.5 + 0.1, 0.0, e.size.y * 0.5 + 0.1)
+		var box := AABB(e.position - Vector3(half.x, 0.2, half.z), Vector3(half.x * 2.0, maxf(e.bar_height, 0.5) + 0.2, half.z * 2.0))
+		var hit = box.intersects_ray(o, n)
+		if hit != null:
+			var t: float = (hit - o).length()
+			if t < best_t:
+				best_t = t
+				best = e
 	if best:
 		return best
 	var gp: Vector3 = G.camera.screen_to_ground(screen_pos)
 	for e in G.entities:
-		if e.alive and e is Structure and e.visible_to(G.local_team) and e.contains_point(gp, 0.1):
+		if e.alive and e is Structure and e.visible_to(G.local_team) and e.contains_point(gp, 0.25):
 			return e
 	return null
 
 
 func _click_select(pos: Vector2, shift: bool, dbl: bool) -> void:
-	var e := entity_at(pos)
+	var e := entity_at(pos, "own")
 	if e == null:
-		if not shift:
-			_set_selection([])
+		# a stray click on empty ground keeps the selection (Esc deselects)
 		return
 	var now := Time.get_ticks_msec() / 1000.0
 	if e.team == G.local_team and e is Unit and (dbl or (now - _last_click_t < 0.35 and _last_click_def == e.def_id)):
@@ -328,7 +361,7 @@ func _context_order(pos: Vector2, force := false) -> void:
 			Fx.marker(gp, Color(1.0, 0.9, 0.3, 0.9))
 			G.hud.notify("Rally point set")
 		return
-	var t := entity_at(pos)
+	var t := entity_at(pos, "enemy")
 	if t and t.team != G.local_team:
 		# engineers and other specialists interact instead of shooting
 		var enterers: Array = units.filter(func(u): return G.mission and G.mission.can_interact(u, t))
@@ -436,7 +469,8 @@ func _first_structure(def_id: String) -> Structure:
 # ================================================================ cursor
 
 ## Which 3D cursor icon (Cursor3D) fits the current mode / hover target:
-## "arrow" default select, "move", "attack", "sell", "repair", "target"
+## "arrow" default select, "move", "attack", "capture" (engineer / special
+## interaction), "sell", "repair", "target"
 ## (ability targeting) or "place" (structure ghost, tinted by place_ok()).
 func cursor_kind(pos: Vector2) -> String:
 	match mode:
@@ -451,9 +485,11 @@ func cursor_kind(pos: Vector2) -> String:
 				and selection[0].team == G.local_team and not selection[0].produces.is_empty():
 			return "move"   # setting a rally point
 		return "arrow"
-	var t := entity_at(pos)
+	var t := entity_at(pos, "enemy")
 	if t == null:
 		return "move"
+	if G.mission and units.any(func(u): return G.mission.can_interact(u, t)):
+		return "repair" if t.team == G.local_team else "capture"
 	if t.team == G.local_team:
 		return "move"
 	if G.is_enemy(G.local_team, t.team) or t.def.get("targetable", false):
